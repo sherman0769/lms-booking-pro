@@ -1,0 +1,8 @@
+/* app/globals.css  ——  v4 寫法 */
+@import "tailwindcss";
+
+/* 這裡可以加自訂全域樣式 */
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
