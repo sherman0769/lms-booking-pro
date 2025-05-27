@@ -27,7 +27,7 @@ export default function Slot({ date, timeKey, status, name }: Props) {
   const colorCls = {
     available: 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200',
     off: 'bg-red-500 text-white',
-    booked: 'bg-orange-400 text-white',
+    booked: 'bg-gray-300 text-white',
   }[status];
 
   /* 標籤文字 */
