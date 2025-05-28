@@ -30,6 +30,9 @@ export default function Slot({ date, timeKey, status, name }: Props) {
     booked: 'bg-gray-300 text-gray-600',
   }[status];
 
+  /* 預約後按鍵加深外框 */
+  const ringColor = status === 'booked' ? 'ring-gray-500' : 'ring-gray-300';
+
   /* 標籤文字 */
   const label =
     status === 'available' ? '可預約' : status === 'off' ? '排休' : name ?? '已預約';
@@ -40,7 +43,8 @@ export default function Slot({ date, timeKey, status, name }: Props) {
         <button
           onClick={click}
           className={clsx(
-            'h-full w-full rounded-md px-1 text-xs sm:text-sm font-semibold shadow ring-1 ring-gray-300 transition active:scale-95',
+            'h-full w-full rounded-md px-1 text-xs sm:text-sm font-semibold shadow ring-1 transition active:scale-95',
+            ringColor,
             colorCls,
             isCoach && 'cursor-pointer',
             !isCoach && status !== 'available' && 'cursor-not-allowed'
