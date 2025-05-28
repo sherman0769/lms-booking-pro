@@ -16,7 +16,7 @@ export default function Home() {
         {/* 標題與姓名 */}
         <div className="text-center sm:text-left">
           <h1 className="text-2xl sm:text-3xl font-bold">
-            Li&apos;s Meet Pro 課程預約系統
+            Li&apos;s Meet Pro Fitness暨個人行程預約系統
           </h1>
           <p className="text-sm text-gray-600">教練：李詩民</p>
         </div>
