@@ -27,11 +27,11 @@ export default function Slot({ date, timeKey, status, name }: Props) {
   const colorCls = {
     available: 'bg-orange-100 text-orange-900 hover:bg-orange-200',
     off: 'bg-red-500 text-white',
-    booked: 'bg-pink-300 text-pink-800',
+    booked: 'bg-gray-300 text-gray-600',
   }[status];
 
   /* 預約後按鍵加深外框 */
-  const ringColor = status === 'booked' ? 'ring-pink-600' : 'ring-gray-300';
+  const ringColor = status === 'booked' ? 'ring-gray-500' : 'ring-gray-300';
 
   /* 標籤文字 */
   const label =
