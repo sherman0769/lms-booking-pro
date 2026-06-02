@@ -3,10 +3,12 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import {
   collection,
+  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
   setDoc,
+  serverTimestamp,
   FirestoreDataConverter,
 } from 'firebase/firestore';
 import { addDays, format } from 'date-fns';
@@ -21,6 +23,8 @@ export interface SlotData {
   timeKey: string;
   status: SlotStatus;
   name?: string;
+  updatedAt?: unknown;
+  source?: 'coach' | 'student' | 'system';
 }
 
 export type WeekSchedule = Record<string, Record<string, SlotData>>;
@@ -54,6 +58,13 @@ interface ScheduleCtx {
   isLoading: boolean;
   loadError: string | null;
   bookSlot: (d: string, t: string, n: string) => void;
+  setSlotByCoach: (
+    d: string,
+    t: string,
+    status: SlotStatus,
+    options?: { name?: string }
+  ) => void;
+  clearSlotByCoach: (d: string, t: string) => void;
   toggleSlotByCoach: (d: string, t: string) => void;
 }
 
@@ -102,6 +113,10 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
           const copy = { ...prev };
           snap.docChanges().forEach((chg) => {
             const s = chg.doc.data();
+            if (chg.type === 'removed') {
+              if (copy[s.date]) delete copy[s.date][s.timeKey];
+              return;
+            }
             if (!copy[s.date]) copy[s.date] = {};
             copy[s.date][s.timeKey] = s;
           });
@@ -129,7 +144,34 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  /* 3) 教練切換狀態 */
+  /* 3) 教練明確設定狀態 */
+  const setSlotByCoach = async (
+    date: string,
+    timeKey: string,
+    status: SlotStatus,
+    options?: { name?: string }
+  ) => {
+    const id = `${date}_${timeKey}`;
+    const name = options?.name?.trim();
+    const data: Record<string, any> = {
+      date,
+      timeKey,
+      status,
+      updatedAt: serverTimestamp(),
+      source: 'coach',
+    };
+
+    if (status === 'fixed' && name) data.name = name;
+
+    await setDoc(doc(db, 'schedule', id), data, { merge: false });
+  };
+
+  const clearSlotByCoach = async (date: string, timeKey: string) => {
+    const id = `${date}_${timeKey}`;
+    await deleteDoc(doc(db, 'schedule', id));
+  };
+
+  /* 4) 舊版教練切換狀態，目前保留但 UI 不再使用 */
   const toggleSlotByCoach = async (date: string, timeKey: string) => {
     const cur = week[date]?.[timeKey];
     let next: SlotStatus = 'available';
@@ -151,7 +193,15 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ week, isLoading, loadError, bookSlot, toggleSlotByCoach }}
+      value={{
+        week,
+        isLoading,
+        loadError,
+        bookSlot,
+        setSlotByCoach,
+        clearSlotByCoach,
+        toggleSlotByCoach,
+      }}
     >
       {children}
     </Ctx.Provider>
