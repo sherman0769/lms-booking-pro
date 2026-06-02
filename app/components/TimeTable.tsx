@@ -92,6 +92,8 @@ export default function TimeTable() {
                       timeKey={k}
                       status={isLoading ? 'loading' : slot?.status ?? 'unset'}
                       name={slot?.name}
+                      publicLabel={slot?.publicLabel}
+                      note={slot?.note}
                     />
                   );
                 })}
