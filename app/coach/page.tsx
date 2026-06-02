@@ -6,6 +6,8 @@ import { zhTW } from 'date-fns/locale';
 import { useMemo, useState } from 'react';
 import { TIME_KEYS, useSchedule, type SlotData, type SlotDisplayStatus } from '@/lib/useSchedule';
 import { useMode } from '@/lib/useMode';
+import { useWeeklyTemplates } from '@/lib/useWeeklyTemplates';
+import type { WeeklyTemplate } from '@/types';
 
 const TIME_LABELS: Record<(typeof TIME_KEYS)[number], string> = {
   '08:00': '08:00-09:00',
@@ -36,6 +38,8 @@ const STATUS_STYLES: Record<SlotDisplayStatus, string> = {
   loading: 'border-gray-200 bg-gray-50 text-gray-500',
 };
 
+const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
   if (status === 'booked' || status === 'fixed') {
@@ -47,6 +51,11 @@ function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
 export default function CoachDashboardPage() {
   const { isCoach, enterCoach } = useMode();
   const { week, isLoading, loadError } = useSchedule();
+  const {
+    activeTemplates,
+    isLoading: isLoadingWeeklyTemplates,
+    loadError: weeklyTemplatesError,
+  } = useWeeklyTemplates(isCoach);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
@@ -198,11 +207,70 @@ export default function CoachDashboardPage() {
           </div>
         </section>
 
+        <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold">固定課模板</h2>
+              <p className="text-sm text-gray-500">
+                目前先顯示 weeklyTemplates 只讀列表，新增與編輯功能將在後續版本加入。
+              </p>
+            </div>
+            {isLoadingWeeklyTemplates && (
+              <span className="text-sm font-medium text-gray-500">載入固定課模板中...</span>
+            )}
+          </div>
+
+          {weeklyTemplatesError && (
+            <p className="mb-4 rounded-md bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
+              {weeklyTemplatesError}
+            </p>
+          )}
+
+          {!isLoadingWeeklyTemplates && activeTemplates.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
+              目前尚未設定每週固定課模板。
+            </p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {activeTemplates.map((template) => (
+                <WeeklyTemplateCard key={template.id} template={template} />
+              ))}
+            </div>
+          )}
+        </section>
+
         <p className="mt-6 rounded-md bg-white px-4 py-3 text-sm text-gray-600 shadow-sm ring-1 ring-gray-200">
           固定課模板、學生管理、請假補課功能將在後續版本加入。
         </p>
       </div>
     </main>
+  );
+}
+
+function WeeklyTemplateCard({ template }: { template: WeeklyTemplate }) {
+  const displayName = template.name || template.publicLabel || '固定課';
+  const publicLabel = template.publicLabel && template.publicLabel !== template.name
+    ? template.publicLabel
+    : null;
+  const weekdayLabel = WEEKDAY_LABELS[template.weekday] ?? `weekday ${template.weekday}`;
+  const timeLabel = TIME_LABELS[template.timeKey as keyof typeof TIME_LABELS] ?? template.timeKey;
+
+  return (
+    <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sky-950">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium opacity-75">
+            {weekdayLabel} · {timeLabel}
+          </p>
+          <p className="mt-1 text-sm font-bold">{displayName}</p>
+        </div>
+        <span className="rounded-full bg-white/70 px-2 py-1 text-xs font-semibold text-sky-700">
+          固定課
+        </span>
+      </div>
+      {publicLabel && <p className="mt-2 text-xs opacity-80">公開顯示：{publicLabel}</p>}
+      {template.note && <p className="mt-1 text-xs opacity-80">備註：{template.note}</p>}
+    </div>
   );
 }
 
