@@ -55,9 +55,20 @@ export default function CoachDashboardPage() {
     activeTemplates,
     isLoading: isLoadingWeeklyTemplates,
     loadError: weeklyTemplatesError,
+    addWeeklyTemplate,
   } = useWeeklyTemplates(isCoach);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [templateForm, setTemplateForm] = useState({
+    weekday: '1',
+    timeKey: TIME_KEYS[0],
+    name: '',
+    publicLabel: '',
+    note: '',
+  });
+  const [templateSubmitStatus, setTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
+  const [templateMessage, setTemplateMessage] = useState('');
+  const [templateError, setTemplateError] = useState('');
 
   const today = useMemo(() => new Date(), []);
   const todayKey = format(today, 'yyyy-MM-dd');
@@ -106,6 +117,56 @@ export default function CoachDashboardPage() {
       return;
     }
     setPasswordError('密碼錯誤，請再試一次。');
+  };
+
+  const updateTemplateForm = (field: keyof typeof templateForm, value: string) => {
+    setTemplateForm((current) => ({ ...current, [field]: value }));
+    setTemplateMessage('');
+    setTemplateError('');
+  };
+
+  const submitTemplate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTemplateMessage('');
+    setTemplateError('');
+
+    if (!templateForm.name.trim()) {
+      setTemplateError('請輸入名稱 / 班名。');
+      return;
+    }
+
+    const duplicated = activeTemplates.some(
+      (template) =>
+        template.weekday === Number(templateForm.weekday) &&
+        template.timeKey === templateForm.timeKey
+    );
+    if (duplicated) {
+      setTemplateError('這個星期與時段已經有固定課模板。');
+      return;
+    }
+
+    setTemplateSubmitStatus('saving');
+    try {
+      await addWeeklyTemplate({
+        weekday: Number(templateForm.weekday),
+        timeKey: templateForm.timeKey,
+        name: templateForm.name,
+        publicLabel: templateForm.publicLabel,
+        note: templateForm.note,
+      });
+      setTemplateForm({
+        weekday: '1',
+        timeKey: TIME_KEYS[0],
+        name: '',
+        publicLabel: '',
+        note: '',
+      });
+      setTemplateMessage('已新增每週固定課模板');
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '新增固定課模板失敗，請稍後再試。');
+    } finally {
+      setTemplateSubmitStatus('idle');
+    }
   };
 
   if (!isCoach) {
@@ -212,7 +273,7 @@ export default function CoachDashboardPage() {
             <div>
               <h2 className="text-lg font-bold">固定課模板</h2>
               <p className="text-sm text-gray-500">
-                目前先顯示 weeklyTemplates 只讀列表，新增與編輯功能將在後續版本加入。
+                目前先提供新增模板與 weeklyTemplates 只讀列表，編輯功能將在後續版本加入。
               </p>
             </div>
             {isLoadingWeeklyTemplates && (
@@ -225,6 +286,108 @@ export default function CoachDashboardPage() {
               {weeklyTemplatesError}
             </p>
           )}
+
+          <form
+            className="mb-5 rounded-md border border-gray-200 bg-gray-50 p-4"
+            onSubmit={submitTemplate}
+          >
+            <h3 className="text-base font-bold">新增每週固定課</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="template-weekday">
+                  星期
+                </label>
+                <select
+                  id="template-weekday"
+                  value={templateForm.weekday}
+                  onChange={(event) => updateTemplateForm('weekday', event.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                >
+                  {WEEKDAY_LABELS.map((label, index) => (
+                    <option key={label} value={index}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="template-time">
+                  時段
+                </label>
+                <select
+                  id="template-time"
+                  value={templateForm.timeKey}
+                  onChange={(event) => updateTemplateForm('timeKey', event.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                >
+                  {TIME_KEYS.map((timeKey) => (
+                    <option key={timeKey} value={timeKey}>
+                      {TIME_LABELS[timeKey]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="template-name">
+                  名稱 / 班名
+                </label>
+                <input
+                  id="template-name"
+                  value={templateForm.name}
+                  onChange={(event) => updateTemplateForm('name', event.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                  placeholder="王同學、LMS 固定班"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="template-public-label">
+                  公開顯示名稱
+                </label>
+                <input
+                  id="template-public-label"
+                  value={templateForm.publicLabel}
+                  onChange={(event) => updateTemplateForm('publicLabel', event.target.value)}
+                  className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                  placeholder="私人訓練固定課"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="template-note">
+                備註
+              </label>
+              <textarea
+                id="template-note"
+                value={templateForm.note}
+                onChange={(event) => updateTemplateForm('note', event.target.value)}
+                className="min-h-20 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                placeholder="只給教練端看的內部備註"
+              />
+            </div>
+
+            {templateError && (
+              <p className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 ring-1 ring-rose-100">
+                {templateError}
+              </p>
+            )}
+            {templateMessage && (
+              <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-100">
+                {templateMessage}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={templateSubmitStatus === 'saving'}
+              className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+            >
+              {templateSubmitStatus === 'saving' ? '新增中...' : '新增固定課模板'}
+            </button>
+          </form>
 
           {!isLoadingWeeklyTemplates && activeTemplates.length === 0 ? (
             <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">

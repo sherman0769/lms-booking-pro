@@ -2,14 +2,24 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  addDoc,
   collection,
   FirestoreDataConverter,
   getDocs,
   onSnapshot,
   query,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
 import type { WeeklyTemplate } from '@/types';
+
+export interface AddWeeklyTemplateInput {
+  weekday: number;
+  timeKey: string;
+  name: string;
+  publicLabel?: string;
+  note?: string;
+}
 
 const converter: FirestoreDataConverter<WeeklyTemplate> = {
   toFirestore: (template) => {
@@ -34,6 +44,7 @@ interface WeeklyTemplatesState {
   activeTemplates: WeeklyTemplate[];
   isLoading: boolean;
   loadError: string | null;
+  addWeeklyTemplate: (input: AddWeeklyTemplateInput) => Promise<void>;
 }
 
 export function useWeeklyTemplates(enabled = true): WeeklyTemplatesState {
@@ -100,10 +111,56 @@ export function useWeeklyTemplates(enabled = true): WeeklyTemplatesState {
     [templates]
   );
 
+  const addWeeklyTemplate = async (input: AddWeeklyTemplateInput) => {
+    if (!isFirebaseConfigured) {
+      throw new Error('尚未設定 Firebase 環境變數，無法新增固定課模板。');
+    }
+
+    const weekday = Number(input.weekday);
+    const timeKey = input.timeKey.trim();
+    const name = input.name.trim();
+    const publicLabel = input.publicLabel?.trim();
+    const note = input.note?.trim();
+
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      throw new Error('請選擇星期。');
+    }
+    if (!timeKey) {
+      throw new Error('請選擇時段。');
+    }
+    if (!name) {
+      throw new Error('請輸入名稱 / 班名。');
+    }
+
+    const duplicated = activeTemplates.some(
+      (template) => template.weekday === weekday && template.timeKey === timeKey
+    );
+    if (duplicated) {
+      throw new Error('這個星期與時段已經有固定課模板。');
+    }
+
+    const data: Record<string, unknown> = {
+      weekday,
+      timeKey,
+      status: 'fixed',
+      name,
+      active: true,
+      source: 'coach',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (publicLabel) data.publicLabel = publicLabel;
+    if (note) data.note = note;
+
+    await addDoc(collection(db, 'weeklyTemplates'), data);
+  };
+
   return {
     templates,
     activeTemplates,
     isLoading,
     loadError,
+    addWeeklyTemplate,
   };
 }
