@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { useMode } from '@/lib/useMode';
 import type { SlotDisplayStatus } from '@/lib/useSchedule';
 import { useSchedule } from '@/lib/useSchedule';
+import CoachSlotActionModal from './CoachSlotActionModal';
 import NameModal from './NameModal';
 
 interface Props {
@@ -16,14 +17,16 @@ interface Props {
 
 export default function Slot({ date, timeKey, status, name }: Props) {
   const { isCoach } = useMode();
-  const { toggleSlotByCoach, bookSlot, loadError } = useSchedule();
+  const { setSlotByCoach, clearSlotByCoach, bookSlot, loadError } =
+    useSchedule();
   const [askName, setAskName] = useState(false);
+  const [showCoachActions, setShowCoachActions] = useState(false);
   const canWrite = !loadError && status !== 'loading';
   const isInteractive = canWrite && (status === 'available' || isCoach);
 
   const click = () => {
     if (!canWrite) return;
-    if (isCoach) toggleSlotByCoach(date, timeKey);
+    if (isCoach) setShowCoachActions(true);
     else if (status === 'available') setAskName(true);
   };
 
@@ -70,6 +73,16 @@ export default function Slot({ date, timeKey, status, name }: Props) {
         isOpen={askName}
         onClose={() => setAskName(false)}
         onConfirm={(n) => bookSlot(date, timeKey, n)}
+      />
+
+      <CoachSlotActionModal
+        isOpen={showCoachActions}
+        name={name}
+        onClose={() => setShowCoachActions(false)}
+        onSetStatus={(nextStatus, options) =>
+          setSlotByCoach(date, timeKey, nextStatus, options)
+        }
+        onClear={() => clearSlotByCoach(date, timeKey)}
       />
     </>
   );

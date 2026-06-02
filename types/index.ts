@@ -7,4 +7,6 @@ export interface SlotData {
   timeKey: string;    // e.g. 08:00
   status: SlotStatus;
   name?: string;      // booked 時顯示
+  updatedAt?: unknown;
+  source?: 'coach' | 'student' | 'system';
 }
