@@ -13,9 +13,18 @@ interface Props {
   timeKey: string;
   status: SlotDisplayStatus;
   name?: string;
+  publicLabel?: string;
+  note?: string;
 }
 
-export default function Slot({ date, timeKey, status, name }: Props) {
+export default function Slot({
+  date,
+  timeKey,
+  status,
+  name,
+  publicLabel,
+  note,
+}: Props) {
   const { isCoach } = useMode();
   const { setSlotByCoach, clearSlotByCoach, bookSlot, loadError } =
     useSchedule();
@@ -40,14 +49,17 @@ export default function Slot({ date, timeKey, status, name }: Props) {
     loading: 'bg-gray-100 text-gray-500 ring-gray-200 animate-pulse',
   } satisfies Record<SlotDisplayStatus, string>;
 
+  const studentLabel = publicLabel || name;
+  const coachLabel = name || publicLabel;
   const label = {
     available: '可預約',
-    booked: isCoach && name ? name : '已預約',
-    fixed: isCoach && name ? name : '固定課',
+    booked: (isCoach ? coachLabel : studentLabel) || '已預約',
+    fixed: (isCoach ? coachLabel : studentLabel) || '固定課',
     off: '未開放',
     unset: isCoach ? '尚未設定' : '暫未開放',
     loading: '載入中',
   } satisfies Record<SlotDisplayStatus, string>;
+  const showCoachNote = isCoach && note && status !== 'loading';
 
   return (
     <>
@@ -64,7 +76,12 @@ export default function Slot({ date, timeKey, status, name }: Props) {
               : 'cursor-not-allowed opacity-90'
           )}
         >
-          {label[status]}
+          <span className="block truncate">{label[status]}</span>
+          {showCoachNote && (
+            <span className="mt-0.5 block truncate text-[10px] font-normal opacity-75">
+              {note}
+            </span>
+          )}
         </button>
       </td>
 
@@ -78,6 +95,7 @@ export default function Slot({ date, timeKey, status, name }: Props) {
       <CoachSlotActionModal
         isOpen={showCoachActions}
         name={name}
+        publicLabel={publicLabel}
         onClose={() => setShowCoachActions(false)}
         onSetStatus={(nextStatus, options) =>
           setSlotByCoach(date, timeKey, nextStatus, options)

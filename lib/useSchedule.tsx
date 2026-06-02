@@ -23,8 +23,10 @@ export interface SlotData {
   timeKey: string;
   status: SlotStatus;
   name?: string;
+  publicLabel?: string;
+  note?: string;
   updatedAt?: unknown;
-  source?: 'coach' | 'student' | 'system';
+  source?: 'coach' | 'student' | 'system' | 'template';
 }
 
 export type WeekSchedule = Record<string, Record<string, SlotData>>;
@@ -47,6 +49,8 @@ const converter: FirestoreDataConverter<SlotData> = {
     // Firestore 不接受 undefined 欄位，需先過濾
     const data: Record<string, any> = { ...d };
     if (data.name === undefined) delete data.name;
+    if (data.publicLabel === undefined) delete data.publicLabel;
+    if (data.note === undefined) delete data.note;
     return data;
   },
   fromFirestore: (snap) => snap.data() as SlotData,
@@ -62,7 +66,7 @@ interface ScheduleCtx {
     d: string,
     t: string,
     status: SlotStatus,
-    options?: { name?: string }
+    options?: { name?: string; publicLabel?: string; note?: string }
   ) => void;
   clearSlotByCoach: (d: string, t: string) => void;
   toggleSlotByCoach: (d: string, t: string) => void;
@@ -139,8 +143,15 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     const id = `${date}_${timeKey}`;
     await setDoc(
       doc(db, 'schedule', id).withConverter(converter),
-      { date, timeKey, status: 'booked', name },
-      { merge: true }
+      {
+        date,
+        timeKey,
+        status: 'booked',
+        name,
+        updatedAt: serverTimestamp(),
+        source: 'student',
+      },
+      { merge: false }
     );
   };
 
@@ -149,10 +160,12 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     date: string,
     timeKey: string,
     status: SlotStatus,
-    options?: { name?: string }
+    options?: { name?: string; publicLabel?: string; note?: string }
   ) => {
     const id = `${date}_${timeKey}`;
     const name = options?.name?.trim();
+    const publicLabel = options?.publicLabel?.trim();
+    const note = options?.note?.trim();
     const data: Record<string, any> = {
       date,
       timeKey,
@@ -162,6 +175,8 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     };
 
     if (status === 'fixed' && name) data.name = name;
+    if (status === 'fixed' && publicLabel) data.publicLabel = publicLabel;
+    if (note) data.note = note;
 
     await setDoc(doc(db, 'schedule', id), data, { merge: false });
   };

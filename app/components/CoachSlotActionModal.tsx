@@ -6,28 +6,40 @@ import type { SlotStatus } from '@/lib/useSchedule';
 interface Props {
   isOpen: boolean;
   name?: string;
+  publicLabel?: string;
   onClose: () => void;
   onClear: () => void;
-  onSetStatus: (status: SlotStatus, options?: { name?: string }) => void;
+  onSetStatus: (
+    status: SlotStatus,
+    options?: { name?: string; publicLabel?: string }
+  ) => void;
 }
 
 export default function CoachSlotActionModal({
   isOpen,
   name,
+  publicLabel,
   onClose,
   onClear,
   onSetStatus,
 }: Props) {
   const [fixedName, setFixedName] = useState(name ?? '');
+  const [fixedPublicLabel, setFixedPublicLabel] = useState(publicLabel ?? '');
 
   useEffect(() => {
-    if (isOpen) setFixedName(name ?? '');
-  }, [isOpen, name]);
+    if (isOpen) {
+      setFixedName(name ?? '');
+      setFixedPublicLabel(publicLabel ?? '');
+    }
+  }, [isOpen, name, publicLabel]);
 
   if (!isOpen) return null;
 
   const setFixed = () => {
-    onSetStatus('fixed', { name: fixedName });
+    onSetStatus('fixed', {
+      name: fixedName,
+      publicLabel: fixedPublicLabel,
+    });
     onClose();
   };
 
@@ -61,6 +73,15 @@ export default function CoachSlotActionModal({
               value={fixedName}
               onChange={(e) => setFixedName(e.target.value)}
               placeholder="可留空"
+              className="mb-2 w-full rounded border px-2 py-1 text-sm"
+            />
+            <label className="mb-2 block text-sm font-medium text-gray-700">
+              公開顯示名稱
+            </label>
+            <input
+              value={fixedPublicLabel}
+              onChange={(e) => setFixedPublicLabel(e.target.value)}
+              placeholder="留空則顯示名稱或班名"
               className="mb-2 w-full rounded border px-2 py-1 text-sm"
             />
             <button
