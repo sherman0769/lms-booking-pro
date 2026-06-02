@@ -13,7 +13,7 @@ import { addDays, format } from 'date-fns';
 import { db, isFirebaseConfigured } from './firebase';
 
 /* ------------ 型別 ------------ */
-export type SlotStatus = 'available' | 'off' | 'booked';
+export type SlotStatus = 'available' | 'booked' | 'fixed' | 'off';
 export type SlotDisplayStatus = SlotStatus | 'unset' | 'loading';
 
 export interface SlotData {

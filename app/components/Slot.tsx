@@ -31,6 +31,7 @@ export default function Slot({ date, timeKey, status, name }: Props) {
     available:
       'bg-emerald-100 text-emerald-900 ring-emerald-300 hover:bg-emerald-200 hover:ring-emerald-500',
     booked: 'bg-rose-50 text-rose-800 ring-rose-200',
+    fixed: 'bg-sky-50 text-sky-800 ring-sky-200',
     off: 'bg-slate-100 text-slate-600 ring-slate-200',
     unset: 'bg-amber-50 text-amber-800 ring-amber-200',
     loading: 'bg-gray-100 text-gray-500 ring-gray-200 animate-pulse',
@@ -38,9 +39,10 @@ export default function Slot({ date, timeKey, status, name }: Props) {
 
   const label = {
     available: '可預約',
-    booked: name ?? '已預約',
+    booked: isCoach && name ? name : '已預約',
+    fixed: isCoach && name ? name : '固定課',
     off: '未開放',
-    unset: '尚未設定',
+    unset: isCoach ? '尚未設定' : '暫未開放',
     loading: '載入中',
   } satisfies Record<SlotDisplayStatus, string>;
 
