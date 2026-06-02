@@ -39,10 +39,21 @@ export default function TimeTable() {
     addDays(new Date(), i)
   );
 
-  const { week } = useSchedule();
+  const { week, isLoading, loadError } = useSchedule();
+  const hasScheduleData = Object.values(week).some(
+    (day) => Object.keys(day).length > 0
+  );
+  const notice = isLoading
+    ? '載入預約資料中...'
+    : loadError ?? (!hasScheduleData ? '目前尚無已設定的預約時段。' : null);
 
   return (
     <div className="w-full overflow-x-auto">
+      {notice && (
+        <p className="mx-auto mb-3 w-fit rounded-md bg-white px-3 py-2 text-center text-sm font-medium text-gray-600 shadow-sm ring-1 ring-gray-200">
+          {notice}
+        </p>
+      )}
       <table className="mx-auto rounded-lg shadow ring-1 ring-gray-200">
         <thead>
           <tr>
@@ -73,16 +84,14 @@ export default function TimeTable() {
                 </th>
                 {dates.map((d) => {
                   const dateKey = format(d, 'yyyy-MM-dd');
-                  const slot = week[dateKey]?.[k] ?? {
-                    status: 'booked' as const,
-                  };
+                  const slot = week[dateKey]?.[k];
                   return (
                     <Slot
                       key={dateKey + k}
                       date={dateKey}
                       timeKey={k}
-                      status={slot.status}
-                      name={slot.name}
+                      status={isLoading ? 'loading' : slot?.status ?? 'unset'}
+                      name={slot?.name}
                     />
                   );
                 })}

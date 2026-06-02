@@ -11,6 +11,8 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+
 // Firebase 只能初始化一次
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 

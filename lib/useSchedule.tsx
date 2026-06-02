@@ -10,10 +10,11 @@ import {
   FirestoreDataConverter,
 } from 'firebase/firestore';
 import { addDays, format } from 'date-fns';
-import { db } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
 
 /* ------------ 型別 ------------ */
 export type SlotStatus = 'available' | 'off' | 'booked';
+export type SlotDisplayStatus = SlotStatus | 'unset' | 'loading';
 
 export interface SlotData {
   date: string;
@@ -50,6 +51,8 @@ const converter: FirestoreDataConverter<SlotData> = {
 /* ------------ React Context ------------ */
 interface ScheduleCtx {
   week: WeekSchedule;
+  isLoading: boolean;
+  loadError: string | null;
   bookSlot: (d: string, t: string, n: string) => void;
   toggleSlotByCoach: (d: string, t: string) => void;
 }
@@ -58,34 +61,60 @@ const Ctx = createContext<ScheduleCtx | null>(null);
 
 export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   const [week, setWeek] = useState<WeekSchedule>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   /* 1) 初始載入 & 即時監聽 */
   useEffect(() => {
+    if (!isFirebaseConfigured) {
+      setLoadError('尚未設定 Firebase 環境變數，預約資料暫時未開放。');
+      setIsLoading(false);
+      return;
+    }
+
     const col = collection(db, 'schedule').withConverter(converter);
 
     // 一次性載入
-    getDocs(col).then((snap) => {
-      const data: WeekSchedule = {};
-      snap.forEach((d) => {
-        const s = d.data();
-        if (!data[s.date]) data[s.date] = {};
-        data[s.date][s.timeKey] = s;
+    getDocs(col)
+      .then((snap) => {
+        const data: WeekSchedule = {};
+        snap.forEach((d) => {
+          const s = d.data();
+          if (!data[s.date]) data[s.date] = {};
+          data[s.date][s.timeKey] = s;
+        });
+        setWeek(data);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        console.warn('Failed to load schedule', err);
+        setLoadError('預約資料載入失敗，請確認 Firebase 設定。');
+      })
+      .finally(() => {
+        setIsLoading(false);
       });
-      setWeek(data);
-    });
 
     // 即時監聽
-    const unsub = onSnapshot(col, (snap) => {
-      setWeek((prev) => {
-        const copy = { ...prev };
-        snap.docChanges().forEach((chg) => {
-          const s = chg.doc.data();
-          if (!copy[s.date]) copy[s.date] = {};
-          copy[s.date][s.timeKey] = s;
+    const unsub = onSnapshot(
+      col,
+      (snap) => {
+        setWeek((prev) => {
+          const copy = { ...prev };
+          snap.docChanges().forEach((chg) => {
+            const s = chg.doc.data();
+            if (!copy[s.date]) copy[s.date] = {};
+            copy[s.date][s.timeKey] = s;
+          });
+          return copy;
         });
-        return copy;
-      });
-    });
+        setLoadError(null);
+      },
+      (err) => {
+        console.warn('Failed to subscribe schedule', err);
+        setLoadError('預約資料同步失敗，請確認 Firebase 設定。');
+        setIsLoading(false);
+      }
+    );
 
     return () => unsub();
   }, []);
@@ -121,7 +150,9 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ week, bookSlot, toggleSlotByCoach }}>
+    <Ctx.Provider
+      value={{ week, isLoading, loadError, bookSlot, toggleSlotByCoach }}
+    >
       {children}
     </Ctx.Provider>
   );

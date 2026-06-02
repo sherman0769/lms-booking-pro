@@ -1,5 +1,6 @@
 // types/index.ts
-export type SlotStatus = 'available' | 'booked';
+export type SlotStatus = 'available' | 'booked' | 'off';
+export type SlotDisplayStatus = SlotStatus | 'unset' | 'loading';
 
 export interface SlotData {
   date: string;       // YYYY-MM-DD
