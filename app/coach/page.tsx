@@ -39,6 +39,18 @@ const STATUS_STYLES: Record<SlotDisplayStatus, string> = {
 };
 
 const WEEKDAY_LABELS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+const AUDIT_DAYS = 28;
+
+type SourceKey = 'coach' | 'student' | 'template' | 'system' | 'missing';
+type StatusKey = 'available' | 'booked' | 'fixed' | 'off' | 'other';
+
+interface AuditRiskItem {
+  date: string;
+  timeKey: string;
+  name?: string;
+  publicLabel?: string;
+  note?: string;
+}
 
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
@@ -46,6 +58,30 @@ function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
     return slot.name || slot.publicLabel || STATUS_LABELS[status];
   }
   return STATUS_LABELS[status];
+}
+
+function getSourceKey(source: SlotData['source']): SourceKey {
+  if (source === 'coach' || source === 'student' || source === 'template' || source === 'system') {
+    return source;
+  }
+  return 'missing';
+}
+
+function getStatusKey(status: SlotData['status'] | undefined): StatusKey {
+  if (status === 'available' || status === 'booked' || status === 'fixed' || status === 'off') {
+    return status;
+  }
+  return 'other';
+}
+
+function toAuditRiskItem(date: string, timeKey: string, slot: SlotData): AuditRiskItem {
+  return {
+    date,
+    timeKey,
+    name: slot.name,
+    publicLabel: slot.publicLabel,
+    note: slot.note,
+  };
 }
 
 export default function CoachDashboardPage() {
@@ -78,6 +114,10 @@ export default function CoachDashboardPage() {
     () => Array.from({ length: 7 }, (_, index) => format(addDays(today, index), 'yyyy-MM-dd')),
     [today]
   );
+  const auditDates = useMemo(
+    () => Array.from({ length: AUDIT_DAYS }, (_, index) => format(addDays(today, index), 'yyyy-MM-dd')),
+    [today]
+  );
 
   const summary = useMemo(() => {
     const counts = {
@@ -98,6 +138,71 @@ export default function CoachDashboardPage() {
 
     return counts;
   }, [week, weekDates]);
+
+  const scheduleAudit = useMemo(() => {
+    const statusCounts: Record<StatusKey, number> = {
+      available: 0,
+      booked: 0,
+      fixed: 0,
+      off: 0,
+      other: 0,
+    };
+    const sourceCounts: Record<SourceKey, number> = {
+      coach: 0,
+      student: 0,
+      template: 0,
+      system: 0,
+      missing: 0,
+    };
+    const missingSource = {
+      booked: [] as AuditRiskItem[],
+      off: [] as AuditRiskItem[],
+      available: [] as AuditRiskItem[],
+    };
+    let scheduleDocCount = 0;
+    let hasNameCount = 0;
+    let hasPublicLabelCount = 0;
+    let hasNoteCount = 0;
+
+    for (const dateKey of auditDates) {
+      for (const timeKey of TIME_KEYS) {
+        const slot = week[dateKey]?.[timeKey];
+        if (!slot) continue;
+
+        scheduleDocCount += 1;
+        statusCounts[getStatusKey(slot.status)] += 1;
+        const sourceKey = getSourceKey(slot.source);
+        sourceCounts[sourceKey] += 1;
+
+        if (slot.name) hasNameCount += 1;
+        if (slot.publicLabel) hasPublicLabelCount += 1;
+        if (slot.note) hasNoteCount += 1;
+
+        if (sourceKey === 'missing') {
+          if (slot.status === 'booked') {
+            missingSource.booked.push(toAuditRiskItem(dateKey, timeKey, slot));
+          } else if (slot.status === 'off') {
+            missingSource.off.push(toAuditRiskItem(dateKey, timeKey, slot));
+          } else if (slot.status === 'available') {
+            missingSource.available.push(toAuditRiskItem(dateKey, timeKey, slot));
+          }
+        }
+      }
+    }
+
+    const totalSlots = auditDates.length * TIME_KEYS.length;
+    return {
+      totalSlots,
+      scheduleDocCount,
+      missingScheduleDocCount: totalSlots - scheduleDocCount,
+      hasNameCount,
+      hasPublicLabelCount,
+      hasNoteCount,
+      statusCounts,
+      sourceCounts,
+      missingSource,
+    };
+  }, [auditDates, week]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
     const slot = week[todayKey]?.[timeKey];
@@ -268,6 +373,73 @@ export default function CoachDashboardPage() {
         <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
+              <h2 className="text-lg font-bold">排程資料健康檢查</h2>
+              <p className="text-sm text-gray-500">
+                只讀盤點今天起未來 {AUDIT_DAYS} 天、每天 {TIME_KEYS.length} 個時段的 schedule 資料。
+              </p>
+            </div>
+            {isLoading && <span className="text-sm font-medium text-gray-500">載入盤點資料中...</span>}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <AuditMetric label="總格數" value={scheduleAudit.totalSlots} />
+            <AuditMetric label="有 schedule doc" value={scheduleAudit.scheduleDocCount} />
+            <AuditMetric label="缺 schedule doc" value={scheduleAudit.missingScheduleDocCount} />
+            <AuditMetric label="有 name" value={scheduleAudit.hasNameCount} />
+            <AuditMetric label="有 publicLabel" value={scheduleAudit.hasPublicLabelCount} />
+            <AuditMetric label="有 note" value={scheduleAudit.hasNoteCount} />
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <AuditCountTable
+              title="status 統計"
+              rows={[
+                ['available', scheduleAudit.statusCounts.available],
+                ['booked', scheduleAudit.statusCounts.booked],
+                ['fixed', scheduleAudit.statusCounts.fixed],
+                ['off', scheduleAudit.statusCounts.off],
+                ['其他', scheduleAudit.statusCounts.other],
+              ]}
+            />
+            <AuditCountTable
+              title="source 統計"
+              rows={[
+                ['coach', scheduleAudit.sourceCounts.coach],
+                ['student', scheduleAudit.sourceCounts.student],
+                ['template', scheduleAudit.sourceCounts.template],
+                ['system', scheduleAudit.sourceCounts.system],
+                ['missing source', scheduleAudit.sourceCounts.missing],
+              ]}
+            />
+          </div>
+
+          <div className="mt-5 space-y-4">
+            <AuditRiskList
+              title="缺 source + booked"
+              description="真實資料可能性高，請勿直接覆蓋。"
+              items={scheduleAudit.missingSource.booked}
+            />
+            <AuditRiskList
+              title="缺 source + off"
+              description="可能是休息 / 未開放，需人工確認。"
+              items={scheduleAudit.missingSource.off}
+            />
+            <AuditRiskList
+              title="缺 source + available"
+              description="可能是 placeholder 候選。"
+              items={scheduleAudit.missingSource.available}
+            />
+          </div>
+
+          <div className="mt-5 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
+            目前 weeklyTemplates 只應覆蓋缺 schedule doc 的時段。缺 source 的舊資料暫時不應自動覆蓋。
+            若要讓 weeklyTemplates 生效，需先人工確認哪些 available 舊資料可視為 placeholder。
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
               <h2 className="text-lg font-bold">今日課表簡表</h2>
               <p className="text-sm text-gray-500">顯示今日 8 個主要授課時段。</p>
             </div>
@@ -432,6 +604,91 @@ export default function CoachDashboardPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+function AuditMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+      <p className="text-xs font-medium text-gray-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+    </div>
+  );
+}
+
+function AuditCountTable({ title, rows }: { title: string; rows: Array<[string, number]> }) {
+  return (
+    <div className="rounded-md border border-gray-200">
+      <div className="border-b border-gray-200 px-3 py-2 text-sm font-bold">{title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-64 text-left text-sm">
+          <thead className="bg-gray-50 text-xs font-semibold text-gray-500">
+            <tr>
+              <th className="px-3 py-2">項目</th>
+              <th className="px-3 py-2 text-right">數量</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map(([label, value]) => (
+              <tr key={label}>
+                <td className="px-3 py-2 font-medium text-gray-700">{label}</td>
+                <td className="px-3 py-2 text-right text-gray-900">{value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AuditRiskList({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: AuditRiskItem[];
+}) {
+  return (
+    <div className="rounded-md border border-gray-200">
+      <div className="flex flex-col gap-1 border-b border-gray-200 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-bold">{title}</h3>
+          <p className="text-xs text-gray-500">{description}</p>
+        </div>
+        <span className="text-xs font-semibold text-gray-500">{items.length} 筆</span>
+      </div>
+      {items.length === 0 ? (
+        <p className="px-3 py-4 text-sm text-gray-500">目前沒有符合條件的資料。</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-gray-50 text-xs font-semibold text-gray-500">
+              <tr>
+                <th className="px-3 py-2">日期</th>
+                <th className="px-3 py-2">時段</th>
+                <th className="px-3 py-2">name</th>
+                <th className="px-3 py-2">publicLabel</th>
+                <th className="px-3 py-2">note</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {items.map((item) => (
+                <tr key={`${item.date}-${item.timeKey}`}>
+                  <td className="px-3 py-2 font-medium text-gray-700">{item.date}</td>
+                  <td className="px-3 py-2 text-gray-700">{TIME_LABELS[item.timeKey as keyof typeof TIME_LABELS] ?? item.timeKey}</td>
+                  <td className="px-3 py-2 text-gray-700">{item.name || '-'}</td>
+                  <td className="px-3 py-2 text-gray-700">{item.publicLabel || '-'}</td>
+                  <td className="px-3 py-2 text-gray-700">{item.note || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 
