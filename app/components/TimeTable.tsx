@@ -5,6 +5,8 @@ import { addDays, format } from 'date-fns';
 import DayHeader from './DayHeader';
 import Slot from './Slot';
 import { useSchedule } from '@/lib/useSchedule';
+import { resolveScheduleSlot } from '@/lib/resolveScheduleSlot';
+import { useWeeklyTemplates } from '@/lib/useWeeklyTemplates';
 
 /* 時段與標籤 */
 const ROWS = [
@@ -40,12 +42,21 @@ export default function TimeTable() {
   );
 
   const { week, isLoading, loadError } = useSchedule();
+  const {
+    activeTemplates,
+    isLoading: isLoadingWeeklyTemplates,
+    loadError: weeklyTemplatesError,
+  } = useWeeklyTemplates();
   const hasScheduleData = Object.values(week).some(
     (day) => Object.keys(day).length > 0
   );
-  const notice = isLoading
+  const isResolvingSchedule = isLoading || isLoadingWeeklyTemplates;
+  const hasTemplateData = activeTemplates.length > 0;
+  const notice = isResolvingSchedule
     ? '載入預約資料中...'
-    : loadError ?? (!hasScheduleData ? '目前尚無已設定的預約時段。' : null);
+    : loadError ??
+      weeklyTemplatesError ??
+      (!hasScheduleData && !hasTemplateData ? '目前尚無已設定的預約時段。' : null);
 
   return (
     <div className="w-full overflow-x-auto">
@@ -84,13 +95,19 @@ export default function TimeTable() {
                 </th>
                 {dates.map((d) => {
                   const dateKey = format(d, 'yyyy-MM-dd');
-                  const slot = week[dateKey]?.[k];
+                  const { slot, status } = resolveScheduleSlot({
+                    date: dateKey,
+                    timeKey: k,
+                    scheduleSlot: week[dateKey]?.[k],
+                    activeTemplates,
+                    isLoading: isResolvingSchedule,
+                  });
                   return (
                     <Slot
                       key={dateKey + k}
                       date={dateKey}
                       timeKey={k}
-                      status={isLoading ? 'loading' : slot?.status ?? 'unset'}
+                      status={status}
                       name={slot?.name}
                       publicLabel={slot?.publicLabel}
                       note={slot?.note}
