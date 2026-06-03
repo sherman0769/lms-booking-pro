@@ -52,6 +52,16 @@ interface AuditRiskItem {
   note?: string;
 }
 
+interface TemplateProjectionItem {
+  date: string;
+  weekdayLabel: string;
+  timeKey: string;
+  templateId: string;
+  name?: string;
+  publicLabel?: string;
+  note?: string;
+}
+
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
   if (status === 'booked' || status === 'fixed') {
@@ -82,6 +92,21 @@ function toAuditRiskItem(date: string, timeKey: string, slot: SlotData): AuditRi
     publicLabel: slot.publicLabel,
     note: slot.note,
   };
+}
+
+function getWeekdayFromDateKey(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).getDay();
+}
+
+function findActiveTemplateForSlot(
+  templates: WeeklyTemplate[],
+  dateKey: string,
+  timeKey: string
+) {
+  const weekday = getWeekdayFromDateKey(dateKey);
+  return templates.find(
+    (template) => template.weekday === weekday && template.timeKey === timeKey
+  );
 }
 
 export default function CoachDashboardPage() {
@@ -203,6 +228,49 @@ export default function CoachDashboardPage() {
       missingSource,
     };
   }, [auditDates, week]);
+
+  const templateProjection = useMemo(() => {
+    const projected: TemplateProjectionItem[] = [];
+    let blockedByScheduleCount = 0;
+    let emptyWithoutTemplateCount = 0;
+
+    for (const dateKey of auditDates) {
+      const weekday = getWeekdayFromDateKey(dateKey);
+      const weekdayLabel = WEEKDAY_LABELS[weekday] ?? `weekday ${weekday}`;
+
+      for (const timeKey of TIME_KEYS) {
+        const slot = week[dateKey]?.[timeKey];
+        const template = findActiveTemplateForSlot(activeTemplates, dateKey, timeKey);
+
+        if (slot) {
+          if (template) blockedByScheduleCount += 1;
+          continue;
+        }
+
+        if (template) {
+          projected.push({
+            date: dateKey,
+            weekdayLabel,
+            timeKey,
+            templateId: template.id,
+            name: template.name,
+            publicLabel: template.publicLabel,
+            note: template.note,
+          });
+        } else {
+          emptyWithoutTemplateCount += 1;
+        }
+      }
+    }
+
+    return {
+      activeTemplateCount: activeTemplates.length,
+      projectedCount: projected.length,
+      blockedByScheduleCount,
+      emptyWithoutTemplateCount,
+      projected,
+    };
+  }, [activeTemplates, auditDates, week]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
     const slot = week[todayKey]?.[timeKey];
@@ -368,6 +436,45 @@ export default function CoachDashboardPage() {
           <SummaryCard label="固定課數" value={summary.fixed} className="text-sky-700" />
           <SummaryCard label="未開放數" value={summary.off} className="text-slate-700" />
           <SummaryCard label="尚未設定數" value={summary.unset} className="text-amber-700" />
+        </section>
+
+        <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold">每週固定課未來推導預覽</h2>
+              <p className="text-sm text-gray-500">
+                只讀預覽今天起未來 {AUDIT_DAYS} 天中，缺 schedule doc 且符合 active weeklyTemplates 的時段。
+              </p>
+            </div>
+            {isLoadingWeeklyTemplates && (
+              <span className="text-sm font-medium text-gray-500">載入固定課模板中...</span>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <AuditMetric label="active templates" value={templateProjection.activeTemplateCount} />
+            <AuditMetric label="可推導固定課" value={templateProjection.projectedCount} />
+            <AuditMetric label="被 schedule 擋住" value={templateProjection.blockedByScheduleCount} />
+            <AuditMetric label="空白且無 template" value={templateProjection.emptyWithoutTemplateCount} />
+          </div>
+
+          <div className="mt-4">
+            {!isLoadingWeeklyTemplates && activeTemplates.length === 0 ? (
+              <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
+                目前尚未設定每週固定課模板。
+              </p>
+            ) : templateProjection.projected.length === 0 ? (
+              <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
+                目前沒有可推導的空白時段，因為對應日期時段已有單日 schedule 資料。
+              </p>
+            ) : (
+              <ProjectionList items={templateProjection.projected} />
+            )}
+          </div>
+
+          <div className="mt-4 rounded-md bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
+            此區塊只做預覽，不會寫入 schedule。只有缺 schedule doc 的日期時段才會被列為每週固定課推導。
+          </div>
         </section>
 
         <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
@@ -688,6 +795,47 @@ function AuditRiskList({
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProjectionList({ items }: { items: TemplateProjectionItem[] }) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-sky-200">
+      <table className="w-full min-w-[840px] text-left text-sm">
+        <thead className="bg-sky-50 text-xs font-semibold text-sky-800">
+          <tr>
+            <th className="px-3 py-2">日期</th>
+            <th className="px-3 py-2">星期</th>
+            <th className="px-3 py-2">時段</th>
+            <th className="px-3 py-2">name</th>
+            <th className="px-3 py-2">publicLabel</th>
+            <th className="px-3 py-2">note</th>
+            <th className="px-3 py-2">templateId</th>
+            <th className="px-3 py-2">來源</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-sky-100">
+          {items.map((item) => (
+            <tr key={`${item.date}-${item.timeKey}-${item.templateId}`}>
+              <td className="px-3 py-2 font-medium text-gray-800">{item.date}</td>
+              <td className="px-3 py-2 text-gray-700">{item.weekdayLabel}</td>
+              <td className="px-3 py-2 text-gray-700">
+                {TIME_LABELS[item.timeKey as keyof typeof TIME_LABELS] ?? item.timeKey}
+              </td>
+              <td className="px-3 py-2 text-gray-700">{item.name || '-'}</td>
+              <td className="px-3 py-2 text-gray-700">{item.publicLabel || '-'}</td>
+              <td className="px-3 py-2 text-gray-700">{item.note || '-'}</td>
+              <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.templateId}</td>
+              <td className="px-3 py-2">
+                <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
+                  每週固定推導
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
