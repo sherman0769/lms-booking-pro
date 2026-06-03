@@ -48,6 +48,58 @@ function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   return STATUS_LABELS[status];
 }
 
+function getWeekdayFromDateKey(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).getDay();
+}
+
+function findTemplateForSlot(
+  templates: WeeklyTemplate[],
+  dateKey: string,
+  timeKey: string
+) {
+  const weekday = getWeekdayFromDateKey(dateKey);
+  return templates.find(
+    (template) => template.weekday === weekday && template.timeKey === timeKey
+  );
+}
+
+function getTemplateDisplayText(template: WeeklyTemplate) {
+  return template.name || template.publicLabel || '固定課';
+}
+
+function resolveCoachSlot(
+  dateKey: string,
+  timeKey: string,
+  scheduleSlot: SlotData | undefined,
+  templates: WeeklyTemplate[]
+) {
+  if (scheduleSlot) {
+    return {
+      status: scheduleSlot.status,
+      text: getDisplayText(scheduleSlot, scheduleSlot.status),
+      note: scheduleSlot.note,
+      sourceLabel: null,
+    };
+  }
+
+  const template = findTemplateForSlot(templates, dateKey, timeKey);
+  if (template) {
+    return {
+      status: 'fixed' as const,
+      text: getTemplateDisplayText(template),
+      note: template.note,
+      sourceLabel: '每週固定',
+    };
+  }
+
+  return {
+    status: 'unset' as const,
+    text: STATUS_LABELS.unset,
+    note: undefined,
+    sourceLabel: null,
+  };
+}
+
 export default function CoachDashboardPage() {
   const { isCoach, enterCoach } = useMode();
   const { week, isLoading, loadError } = useSchedule();
@@ -90,24 +142,30 @@ export default function CoachDashboardPage() {
 
     for (const dateKey of weekDates) {
       for (const timeKey of TIME_KEYS) {
-        const status = week[dateKey]?.[timeKey]?.status;
-        if (status) counts[status] += 1;
-        else counts.unset += 1;
+        const resolved = resolveCoachSlot(
+          dateKey,
+          timeKey,
+          week[dateKey]?.[timeKey],
+          activeTemplates
+        );
+        counts[resolved.status] += 1;
       }
     }
 
     return counts;
-  }, [week, weekDates]);
+  }, [activeTemplates, week, weekDates]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
     const slot = week[todayKey]?.[timeKey];
-    const status: SlotDisplayStatus = isLoading ? 'loading' : slot?.status ?? 'unset';
+    const resolved = resolveCoachSlot(todayKey, timeKey, slot, activeTemplates);
+    const status: SlotDisplayStatus = isLoading ? 'loading' : resolved.status;
     return {
       timeKey,
       label: TIME_LABELS[timeKey],
       status,
-      text: getDisplayText(slot, status),
-      note: slot?.note,
+      text: isLoading ? STATUS_LABELS.loading : resolved.text,
+      note: isLoading ? undefined : resolved.note,
+      sourceLabel: isLoading ? null : resolved.sourceLabel,
     };
   });
 
@@ -282,6 +340,11 @@ export default function CoachDashboardPage() {
               >
                 <div className="text-xs font-medium opacity-75">{slot.label}</div>
                 <div className="mt-1 truncate text-sm font-bold">{slot.text}</div>
+                {slot.sourceLabel && (
+                  <div className="mt-1 inline-flex rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                    {slot.sourceLabel}
+                  </div>
+                )}
                 {slot.note && <div className="mt-1 truncate text-xs opacity-75">{slot.note}</div>}
               </div>
             ))}
