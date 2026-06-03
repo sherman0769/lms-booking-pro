@@ -56,6 +56,7 @@ export default function CoachDashboardPage() {
     isLoading: isLoadingWeeklyTemplates,
     loadError: weeklyTemplatesError,
     addWeeklyTemplate,
+    disableWeeklyTemplate,
   } = useWeeklyTemplates(isCoach);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -67,6 +68,7 @@ export default function CoachDashboardPage() {
     note: '',
   });
   const [templateSubmitStatus, setTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
+  const [disablingTemplateId, setDisablingTemplateId] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState('');
   const [templateError, setTemplateError] = useState('');
 
@@ -166,6 +168,24 @@ export default function CoachDashboardPage() {
       setTemplateError(err instanceof Error ? err.message : '新增固定課模板失敗，請稍後再試。');
     } finally {
       setTemplateSubmitStatus('idle');
+    }
+  };
+
+  const handleDisableTemplate = async (template: WeeklyTemplate) => {
+    const confirmed = window.confirm('確定要停用這個固定課模板嗎？');
+    if (!confirmed) return;
+
+    setTemplateMessage('');
+    setTemplateError('');
+    setDisablingTemplateId(template.id);
+
+    try {
+      await disableWeeklyTemplate(template.id);
+      setTemplateMessage('已停用固定課模板');
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '停用固定課模板失敗，請稍後再試。');
+    } finally {
+      setDisablingTemplateId(null);
     }
   };
 
@@ -273,7 +293,7 @@ export default function CoachDashboardPage() {
             <div>
               <h2 className="text-lg font-bold">固定課模板</h2>
               <p className="text-sm text-gray-500">
-                目前先提供新增模板與 weeklyTemplates 只讀列表，編輯功能將在後續版本加入。
+                目前先提供新增、停用與 weeklyTemplates 只讀列表，編輯功能將在後續版本加入。
               </p>
             </div>
             {isLoadingWeeklyTemplates && (
@@ -396,7 +416,12 @@ export default function CoachDashboardPage() {
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {activeTemplates.map((template) => (
-                <WeeklyTemplateCard key={template.id} template={template} />
+                <WeeklyTemplateCard
+                  key={template.id}
+                  template={template}
+                  isDisabling={disablingTemplateId === template.id}
+                  onDisable={handleDisableTemplate}
+                />
               ))}
             </div>
           )}
@@ -410,7 +435,15 @@ export default function CoachDashboardPage() {
   );
 }
 
-function WeeklyTemplateCard({ template }: { template: WeeklyTemplate }) {
+function WeeklyTemplateCard({
+  template,
+  isDisabling,
+  onDisable,
+}: {
+  template: WeeklyTemplate;
+  isDisabling: boolean;
+  onDisable: (template: WeeklyTemplate) => void;
+}) {
   const displayName = template.name || template.publicLabel || '固定課';
   const publicLabel = template.publicLabel && template.publicLabel !== template.name
     ? template.publicLabel
@@ -433,6 +466,14 @@ function WeeklyTemplateCard({ template }: { template: WeeklyTemplate }) {
       </div>
       {publicLabel && <p className="mt-2 text-xs opacity-80">公開顯示：{publicLabel}</p>}
       {template.note && <p className="mt-1 text-xs opacity-80">備註：{template.note}</p>}
+      <button
+        type="button"
+        disabled={isDisabling}
+        onClick={() => onDisable(template)}
+        className="mt-3 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-sky-200 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:text-slate-400"
+      >
+        {isDisabling ? '停用中...' : '停用'}
+      </button>
     </div>
   );
 }

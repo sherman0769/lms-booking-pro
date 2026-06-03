@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   addDoc,
   collection,
+  doc,
   FirestoreDataConverter,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from './firebase';
 import type { WeeklyTemplate } from '@/types';
@@ -45,6 +47,7 @@ interface WeeklyTemplatesState {
   isLoading: boolean;
   loadError: string | null;
   addWeeklyTemplate: (input: AddWeeklyTemplateInput) => Promise<void>;
+  disableWeeklyTemplate: (templateId: string) => Promise<void>;
 }
 
 export function useWeeklyTemplates(enabled = true): WeeklyTemplatesState {
@@ -156,11 +159,28 @@ export function useWeeklyTemplates(enabled = true): WeeklyTemplatesState {
     await addDoc(collection(db, 'weeklyTemplates'), data);
   };
 
+  const disableWeeklyTemplate = async (templateId: string) => {
+    if (!isFirebaseConfigured) {
+      throw new Error('尚未設定 Firebase 環境變數，無法停用固定課模板。');
+    }
+
+    const trimmedTemplateId = templateId.trim();
+    if (!trimmedTemplateId) {
+      throw new Error('缺少固定課模板 ID。');
+    }
+
+    await updateDoc(doc(db, 'weeklyTemplates', trimmedTemplateId), {
+      active: false,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
   return {
     templates,
     activeTemplates,
     isLoading,
     loadError,
     addWeeklyTemplate,
+    disableWeeklyTemplate,
   };
 }
