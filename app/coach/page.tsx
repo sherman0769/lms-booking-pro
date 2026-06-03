@@ -4,10 +4,15 @@ import Link from 'next/link';
 import { addDays, format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { useMemo, useState } from 'react';
-import { TIME_KEYS, useSchedule, type SlotData, type SlotDisplayStatus } from '@/lib/useSchedule';
+import { TIME_KEYS, useSchedule } from '@/lib/useSchedule';
 import { useMode } from '@/lib/useMode';
+import {
+  findMatchingWeeklyTemplate,
+  getWeekdayFromDateKey,
+  resolveScheduleSlot,
+} from '@/lib/resolveScheduleSlot';
 import { useWeeklyTemplates } from '@/lib/useWeeklyTemplates';
-import type { WeeklyTemplate } from '@/types';
+import type { SlotData, SlotDisplayStatus, WeeklyTemplate } from '@/types';
 
 const TIME_LABELS: Record<(typeof TIME_KEYS)[number], string> = {
   '08:00': '08:00-09:00',
@@ -62,16 +67,6 @@ interface TemplateProjectionItem {
   note?: string;
 }
 
-type CoachScheduleSlot = SlotData & {
-  templateId?: string;
-  isFromWeeklyTemplate?: boolean;
-};
-
-interface ResolvedCoachSlot {
-  status: SlotDisplayStatus;
-  slot?: CoachScheduleSlot;
-}
-
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
   if (status === 'booked' || status === 'fixed') {
@@ -102,56 +97,6 @@ function toAuditRiskItem(date: string, timeKey: string, slot: SlotData): AuditRi
     publicLabel: slot.publicLabel,
     note: slot.note,
   };
-}
-
-function getWeekdayFromDateKey(dateKey: string) {
-  return new Date(`${dateKey}T00:00:00`).getDay();
-}
-
-function findActiveTemplateForSlot(
-  templates: WeeklyTemplate[],
-  dateKey: string,
-  timeKey: string
-) {
-  const weekday = getWeekdayFromDateKey(dateKey);
-  return templates.find(
-    (template) => template.weekday === weekday && template.timeKey === timeKey
-  );
-}
-
-function resolveCoachSlot(
-  week: Record<string, Record<string, SlotData>>,
-  templates: WeeklyTemplate[],
-  dateKey: string,
-  timeKey: string,
-  isLoading: boolean
-): ResolvedCoachSlot {
-  if (isLoading) return { status: 'loading' };
-
-  const scheduleSlot = week[dateKey]?.[timeKey];
-  if (scheduleSlot) {
-    return { status: scheduleSlot.status, slot: scheduleSlot };
-  }
-
-  const template = findActiveTemplateForSlot(templates, dateKey, timeKey);
-  if (template) {
-    return {
-      status: 'fixed',
-      slot: {
-        date: dateKey,
-        timeKey,
-        status: 'fixed',
-        name: template.name,
-        publicLabel: template.publicLabel,
-        note: template.note,
-        source: 'template',
-        templateId: template.id,
-        isFromWeeklyTemplate: true,
-      },
-    };
-  }
-
-  return { status: 'unset' };
 }
 
 export default function CoachDashboardPage() {
@@ -200,7 +145,12 @@ export default function CoachDashboardPage() {
 
     for (const dateKey of weekDates) {
       for (const timeKey of TIME_KEYS) {
-        const { status } = resolveCoachSlot(week, activeTemplates, dateKey, timeKey, false);
+        const { status } = resolveScheduleSlot({
+          date: dateKey,
+          timeKey,
+          scheduleSlot: week[dateKey]?.[timeKey],
+          activeTemplates,
+        });
         if (status === 'loading') continue;
         counts[status] += 1;
       }
@@ -285,7 +235,7 @@ export default function CoachDashboardPage() {
 
       for (const timeKey of TIME_KEYS) {
         const slot = week[dateKey]?.[timeKey];
-        const template = findActiveTemplateForSlot(activeTemplates, dateKey, timeKey);
+        const template = findMatchingWeeklyTemplate(dateKey, timeKey, activeTemplates);
 
         if (slot) {
           if (template) blockedByScheduleCount += 1;
@@ -318,7 +268,13 @@ export default function CoachDashboardPage() {
   }, [activeTemplates, auditDates, week]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
-    const { slot, status } = resolveCoachSlot(week, activeTemplates, todayKey, timeKey, isLoading);
+    const { slot, status } = resolveScheduleSlot({
+      date: todayKey,
+      timeKey,
+      scheduleSlot: week[todayKey]?.[timeKey],
+      activeTemplates,
+      isLoading,
+    });
     return {
       timeKey,
       label: TIME_LABELS[timeKey],
