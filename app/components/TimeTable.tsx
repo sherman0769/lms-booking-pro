@@ -22,10 +22,20 @@ const ROWS = [
   { k: '19:30', label: '19:30-20:30' },
 ];
 
+function parseStartDateParam(value: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  return format(date, 'yyyy-MM-dd') === value ? date : null;
+}
+
 /* -------- React Component -------- */
 export default function TimeTable() {
   /* 用 tick 觸發午夜自動重刷 */
   const [, setTick] = useState(0);
+  const [startDateOverride, setStartDateOverride] = useState<Date | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -36,10 +46,14 @@ export default function TimeTable() {
     return () => clearTimeout(tm);
   }, []);
 
-  /* 今天起連續 7 天 */
-  const dates = Array.from({ length: 7 }).map((_, i) =>
-    addDays(new Date(), i)
-  );
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setStartDateOverride(parseStartDateParam(params.get('start')));
+  }, []);
+
+  /* 預設今天起連續 7 天；合法 start query 只覆寫顯示起始日 */
+  const baseDate = startDateOverride ?? new Date();
+  const dates = Array.from({ length: 7 }).map((_, i) => addDays(baseDate, i));
 
   const { week, isLoading, loadError } = useSchedule();
   const {
