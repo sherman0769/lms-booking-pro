@@ -54,6 +54,12 @@ export default function TimeTable() {
   /* 預設今天起連續 7 天；合法 start query 只覆寫顯示起始日 */
   const baseDate = startDateOverride ?? new Date();
   const dates = Array.from({ length: 7 }).map((_, i) => addDays(baseDate, i));
+  const previousWeekHref = `/?start=${format(addDays(baseDate, -7), 'yyyy-MM-dd')}`;
+  const nextWeekHref = `/?start=${format(addDays(baseDate, 7), 'yyyy-MM-dd')}`;
+  const rangeLabel = `${format(dates[0], 'yyyy/MM/dd')} - ${format(
+    dates[6],
+    'yyyy/MM/dd'
+  )}`;
 
   const { week, isLoading, loadError } = useSchedule();
   const {
@@ -74,6 +80,29 @@ export default function TimeTable() {
 
   return (
     <div className="w-full overflow-x-auto">
+      <div className="mx-auto mb-3 flex w-fit max-w-full flex-col items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-700 shadow-sm ring-1 ring-gray-200 sm:flex-row sm:gap-3">
+        <p className="font-medium">{rangeLabel}</p>
+        <div className="flex items-center gap-2">
+          <a
+            href={previousWeekHref}
+            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+          >
+            上一週
+          </a>
+          <a
+            href="/"
+            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+          >
+            本週
+          </a>
+          <a
+            href={nextWeekHref}
+            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+          >
+            下一週
+          </a>
+        </div>
+      </div>
       {notice && (
         <p className="mx-auto mb-3 w-fit rounded-md bg-white px-3 py-2 text-center text-sm font-medium text-gray-600 shadow-sm ring-1 ring-gray-200">
           {notice}
