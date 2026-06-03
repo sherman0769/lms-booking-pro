@@ -62,6 +62,16 @@ interface TemplateProjectionItem {
   note?: string;
 }
 
+type CoachScheduleSlot = SlotData & {
+  templateId?: string;
+  isFromWeeklyTemplate?: boolean;
+};
+
+interface ResolvedCoachSlot {
+  status: SlotDisplayStatus;
+  slot?: CoachScheduleSlot;
+}
+
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
   if (status === 'booked' || status === 'fixed') {
@@ -107,6 +117,41 @@ function findActiveTemplateForSlot(
   return templates.find(
     (template) => template.weekday === weekday && template.timeKey === timeKey
   );
+}
+
+function resolveCoachSlot(
+  week: Record<string, Record<string, SlotData>>,
+  templates: WeeklyTemplate[],
+  dateKey: string,
+  timeKey: string,
+  isLoading: boolean
+): ResolvedCoachSlot {
+  if (isLoading) return { status: 'loading' };
+
+  const scheduleSlot = week[dateKey]?.[timeKey];
+  if (scheduleSlot) {
+    return { status: scheduleSlot.status, slot: scheduleSlot };
+  }
+
+  const template = findActiveTemplateForSlot(templates, dateKey, timeKey);
+  if (template) {
+    return {
+      status: 'fixed',
+      slot: {
+        date: dateKey,
+        timeKey,
+        status: 'fixed',
+        name: template.name,
+        publicLabel: template.publicLabel,
+        note: template.note,
+        source: 'template',
+        templateId: template.id,
+        isFromWeeklyTemplate: true,
+      },
+    };
+  }
+
+  return { status: 'unset' };
 }
 
 export default function CoachDashboardPage() {
@@ -155,14 +200,14 @@ export default function CoachDashboardPage() {
 
     for (const dateKey of weekDates) {
       for (const timeKey of TIME_KEYS) {
-        const status = week[dateKey]?.[timeKey]?.status;
-        if (status) counts[status] += 1;
-        else counts.unset += 1;
+        const { status } = resolveCoachSlot(week, activeTemplates, dateKey, timeKey, false);
+        if (status === 'loading') continue;
+        counts[status] += 1;
       }
     }
 
     return counts;
-  }, [week, weekDates]);
+  }, [activeTemplates, week, weekDates]);
 
   const scheduleAudit = useMemo(() => {
     const statusCounts: Record<StatusKey, number> = {
@@ -273,14 +318,14 @@ export default function CoachDashboardPage() {
   }, [activeTemplates, auditDates, week]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
-    const slot = week[todayKey]?.[timeKey];
-    const status: SlotDisplayStatus = isLoading ? 'loading' : slot?.status ?? 'unset';
+    const { slot, status } = resolveCoachSlot(week, activeTemplates, todayKey, timeKey, isLoading);
     return {
       timeKey,
       label: TIME_LABELS[timeKey],
       status,
       text: getDisplayText(slot, status),
       note: slot?.note,
+      isFromWeeklyTemplate: Boolean(slot?.isFromWeeklyTemplate),
     };
   });
 
@@ -561,6 +606,9 @@ export default function CoachDashboardPage() {
               >
                 <div className="text-xs font-medium opacity-75">{slot.label}</div>
                 <div className="mt-1 truncate text-sm font-bold">{slot.text}</div>
+                {slot.isFromWeeklyTemplate && (
+                  <div className="mt-1 text-xs font-semibold opacity-80">每週固定</div>
+                )}
                 {slot.note && <div className="mt-1 truncate text-xs opacity-75">{slot.note}</div>}
               </div>
             ))}
