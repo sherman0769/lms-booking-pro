@@ -11,6 +11,8 @@ export interface SlotData {
   note?: string;      // 教練端內部備註
   updatedAt?: unknown;
   source?: 'coach' | 'student' | 'system' | 'template';
+  templateId?: string;
+  overrideType?: 'cancel' | 'leave' | 'off' | 'makeup';
 }
 
 export interface WeeklyTemplate {
