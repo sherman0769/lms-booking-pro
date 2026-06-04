@@ -9,7 +9,7 @@ export default function DayHeader({ date }: Props) {
   const text = format(date, 'M/d（EEE）', { locale: zhTW });
   return (
     <th
-      className="sticky top-0 z-10 h-10 w-20 sm:w-28 bg-white/90 backdrop-blur text-center text-xs sm:text-sm font-bold ring-1 ring-gray-200"
+      className="sticky top-0 z-10 h-11 w-24 bg-white/90 px-1 text-center text-xs font-bold whitespace-nowrap ring-1 ring-gray-200 backdrop-blur sm:h-10 sm:w-28 sm:text-sm"
     >
       {text}
     </th>

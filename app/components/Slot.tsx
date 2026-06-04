@@ -63,20 +63,22 @@ export default function Slot({
 
   return (
     <>
-      <td className="h-12 sm:h-14 w-20 sm:w-28 p-1 align-middle">
+      <td className="h-14 w-24 p-1 align-middle sm:h-14 sm:w-28">
         <button
           type="button"
           onClick={click}
           disabled={!isInteractive}
           className={clsx(
-            'h-full w-full rounded-md px-1 text-xs font-semibold leading-tight shadow-sm ring-1 transition sm:text-sm',
+            'min-h-12 h-full w-full rounded-md px-2 py-1 text-xs font-semibold leading-snug shadow-sm ring-1 transition sm:text-sm',
             statusStyle[status],
             isInteractive
               ? 'cursor-pointer active:scale-95'
               : 'cursor-not-allowed opacity-90'
           )}
         >
-          <span className="block truncate">{label[status]}</span>
+          <span className="block max-h-9 overflow-hidden break-words text-center">
+            {label[status]}
+          </span>
           {showCoachNote && (
             <span className="mt-0.5 block truncate text-[10px] font-normal opacity-75">
               {note}

@@ -79,89 +79,94 @@ export default function TimeTable() {
       (!hasScheduleData && !hasTemplateData ? '目前尚無已設定的預約時段。' : null);
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="mx-auto mb-3 flex w-fit max-w-full flex-col items-center gap-2 rounded-md bg-white px-3 py-2 text-sm text-gray-700 shadow-sm ring-1 ring-gray-200 sm:flex-row sm:gap-3">
-        <p className="font-medium">{rangeLabel}</p>
-        <div className="flex items-center gap-2">
+    <div className="w-full">
+      <div className="mx-auto mb-3 flex w-full max-w-md flex-col items-stretch gap-2 rounded-md bg-white px-3 py-3 text-sm text-gray-700 shadow-sm ring-1 ring-gray-200 sm:w-fit sm:max-w-full sm:flex-row sm:items-center sm:gap-3 sm:py-2">
+        <p className="text-center font-medium sm:text-left">{rangeLabel}</p>
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
           <a
             href={previousWeekHref}
-            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
           >
             上一週
           </a>
           <a
             href="/"
-            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
           >
             本週
           </a>
           <a
             href={nextWeekHref}
-            className="rounded-md border border-gray-200 px-3 py-1.5 font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100"
+            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
           >
             下一週
           </a>
         </div>
       </div>
+      <p className="mx-auto mb-2 w-fit rounded-full bg-indigo-50 px-3 py-1 text-center text-xs font-medium text-indigo-700 ring-1 ring-indigo-100 sm:hidden">
+        可左右滑動查看完整週課表
+      </p>
       {notice && (
         <p className="mx-auto mb-3 w-fit rounded-md bg-white px-3 py-2 text-center text-sm font-medium text-gray-600 shadow-sm ring-1 ring-gray-200">
           {notice}
         </p>
       )}
-      <table className="mx-auto rounded-lg shadow ring-1 ring-gray-200">
-        <thead>
-          <tr>
-            <th className="w-28 bg-white"></th>
-            {dates.map((d) => (
-              <DayHeader key={d.toISOString()} date={d} />
-            ))}
-          </tr>
-        </thead>
+      <div className="w-full overflow-x-auto overscroll-x-contain pb-2">
+        <table className="mx-auto min-w-[760px] rounded-lg shadow ring-1 ring-gray-200 sm:min-w-0">
+          <thead>
+            <tr>
+              <th className="sticky left-0 z-20 w-28 bg-white"></th>
+              {dates.map((d) => (
+                <DayHeader key={d.toISOString()} date={d} />
+              ))}
+            </tr>
+          </thead>
 
-        <tbody>
-          {ROWS.map(({ k, label }) =>
-            k === 'LUNCH' || k === 'DINNER' ? (
-              /* 午休 / 晚餐 行 */
-              <tr key={k}>
-                <th
-                  colSpan={8}
-                  className="h-8 sm:h-10 bg-gray-50 text-center text-xs sm:text-sm font-medium text-gray-500"
-                >
-                  {label}
-                </th>
-              </tr>
-            ) : (
-              /* 一般可互動行 */
-              <tr key={k}>
-                <th className="h-12 sm:h-14 w-28 bg-gray-50 text-center text-xs sm:text-sm ring-1 ring-gray-200">
-                  {label}
-                </th>
-                {dates.map((d) => {
-                  const dateKey = format(d, 'yyyy-MM-dd');
-                  const { slot, status } = resolveScheduleSlot({
-                    date: dateKey,
-                    timeKey: k,
-                    scheduleSlot: week[dateKey]?.[k],
-                    activeTemplates,
-                    isLoading: isResolvingSchedule,
-                  });
-                  return (
-                    <Slot
-                      key={dateKey + k}
-                      date={dateKey}
-                      timeKey={k}
-                      status={status}
-                      name={slot?.name}
-                      publicLabel={slot?.publicLabel}
-                      note={slot?.note}
-                    />
-                  );
-                })}
-              </tr>
-            )
-          )}
-        </tbody>
-      </table>
+          <tbody>
+            {ROWS.map(({ k, label }) =>
+              k === 'LUNCH' || k === 'DINNER' ? (
+                /* 午休 / 晚餐 行 */
+                <tr key={k}>
+                  <th
+                    colSpan={8}
+                    className="h-8 bg-gray-50 text-center text-xs font-medium text-gray-500 sm:h-10 sm:text-sm"
+                  >
+                    {label}
+                  </th>
+                </tr>
+              ) : (
+                /* 一般可互動行 */
+                <tr key={k}>
+                  <th className="sticky left-0 z-10 h-14 w-28 bg-gray-50 px-2 text-center text-xs font-semibold text-gray-700 ring-1 ring-gray-200 sm:h-14 sm:text-sm">
+                    {label}
+                  </th>
+                  {dates.map((d) => {
+                    const dateKey = format(d, 'yyyy-MM-dd');
+                    const { slot, status } = resolveScheduleSlot({
+                      date: dateKey,
+                      timeKey: k,
+                      scheduleSlot: week[dateKey]?.[k],
+                      activeTemplates,
+                      isLoading: isResolvingSchedule,
+                    });
+                    return (
+                      <Slot
+                        key={dateKey + k}
+                        date={dateKey}
+                        timeKey={k}
+                        status={status}
+                        name={slot?.name}
+                        publicLabel={slot?.publicLabel}
+                        note={slot?.note}
+                      />
+                    );
+                  })}
+                </tr>
+              )
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
