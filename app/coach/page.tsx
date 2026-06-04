@@ -67,6 +67,14 @@ interface TemplateProjectionItem {
   note?: string;
 }
 
+interface SingleCancelItem {
+  date: string;
+  weekdayLabel: string;
+  timeKey: string;
+  templateId: string;
+  note?: string;
+}
+
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
   if (status === 'booked' || status === 'fixed') {
@@ -101,7 +109,7 @@ function toAuditRiskItem(date: string, timeKey: string, slot: SlotData): AuditRi
 
 export default function CoachDashboardPage() {
   const { isCoach, enterCoach } = useMode();
-  const { week, isLoading, loadError, setSlotByCoach } = useSchedule();
+  const { week, isLoading, loadError, setSlotByCoach, clearSlotByCoach } = useSchedule();
   const {
     activeTemplates,
     isLoading: isLoadingWeeklyTemplates,
@@ -121,6 +129,7 @@ export default function CoachDashboardPage() {
   const [templateSubmitStatus, setTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
   const [disablingTemplateId, setDisablingTemplateId] = useState<string | null>(null);
   const [cancelingProjectionKey, setCancelingProjectionKey] = useState<string | null>(null);
+  const [undoingSingleCancelKey, setUndoingSingleCancelKey] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState('');
   const [templateError, setTemplateError] = useState('');
 
@@ -268,6 +277,35 @@ export default function CoachDashboardPage() {
     };
   }, [activeTemplates, auditDates, week]);
 
+  const singleCancelOverrides = useMemo(() => {
+    const items: SingleCancelItem[] = [];
+
+    for (const dateKey of auditDates) {
+      const weekday = getWeekdayFromDateKey(dateKey);
+      const weekdayLabel = WEEKDAY_LABELS[weekday] ?? `weekday ${weekday}`;
+
+      for (const timeKey of TIME_KEYS) {
+        const slot = week[dateKey]?.[timeKey];
+        if (
+          slot?.status === 'off' &&
+          slot.source === 'coach' &&
+          slot.overrideType === 'leave' &&
+          slot.templateId
+        ) {
+          items.push({
+            date: dateKey,
+            weekdayLabel,
+            timeKey,
+            templateId: slot.templateId,
+            note: slot.note,
+          });
+        }
+      }
+    }
+
+    return items;
+  }, [auditDates, week]);
+
   const todaySlots = TIME_KEYS.map((timeKey) => {
     const { slot, status } = resolveScheduleSlot({
       date: todayKey,
@@ -387,6 +425,25 @@ export default function CoachDashboardPage() {
     }
   };
 
+  const handleUndoSingleCancel = async (item: SingleCancelItem) => {
+    const confirmed = window.confirm('確定要取消這次停課，恢復每週固定課嗎？');
+    if (!confirmed) return;
+
+    const overrideKey = `${item.date}_${item.timeKey}`;
+    setTemplateMessage('');
+    setTemplateError('');
+    setUndoingSingleCancelKey(overrideKey);
+
+    try {
+      await clearSlotByCoach(item.date, item.timeKey);
+      setTemplateMessage('已取消單次停課');
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '取消單次停課失敗，請稍後再試。');
+    } finally {
+      setUndoingSingleCancelKey(null);
+    }
+  };
+
   if (!isCoach) {
     return (
       <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-900">
@@ -503,6 +560,34 @@ export default function CoachDashboardPage() {
 
           <div className="mt-4 rounded-md bg-sky-50 px-4 py-3 text-sm text-sky-900 ring-1 ring-sky-200">
             此區塊只做預覽，不會寫入 schedule。只有缺 schedule doc 的日期時段才會被列為每週固定課推導。
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 sm:p-5">
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold">單次停課清單</h2>
+              <p className="text-sm text-gray-500">
+                列出今天起未來 {AUDIT_DAYS} 天內，由 schedule override 記錄的單次停課。
+              </p>
+            </div>
+            {isLoading && <span className="text-sm font-medium text-gray-500">載入單次停課資料中...</span>}
+          </div>
+
+          {singleCancelOverrides.length === 0 ? (
+            <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
+              目前沒有單次停課資料。
+            </p>
+          ) : (
+            <SingleCancelList
+              items={singleCancelOverrides}
+              undoingSingleCancelKey={undoingSingleCancelKey}
+              onUndo={handleUndoSingleCancel}
+            />
+          )}
+
+          <div className="mt-4 rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
+            取消單次停課會刪除該日期時段的 schedule override。若 weeklyTemplate 仍為 active，固定課會重新顯示。
           </div>
         </section>
 
@@ -885,6 +970,67 @@ function ProjectionList({
                     className="rounded-md bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                   >
                     {isCanceling ? '設定中...' : '單次停課'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SingleCancelList({
+  items,
+  undoingSingleCancelKey,
+  onUndo,
+}: {
+  items: SingleCancelItem[];
+  undoingSingleCancelKey: string | null;
+  onUndo: (item: SingleCancelItem) => void;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-md border border-amber-200">
+      <table className="w-full min-w-[760px] text-left text-sm">
+        <thead className="bg-amber-50 text-xs font-semibold text-amber-800">
+          <tr>
+            <th className="px-3 py-2">日期</th>
+            <th className="px-3 py-2">星期</th>
+            <th className="px-3 py-2">時段</th>
+            <th className="px-3 py-2">note</th>
+            <th className="px-3 py-2">templateId</th>
+            <th className="px-3 py-2">狀態</th>
+            <th className="px-3 py-2">操作</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-amber-100">
+          {items.map((item) => {
+            const overrideKey = `${item.date}_${item.timeKey}`;
+            const isUndoing = undoingSingleCancelKey === overrideKey;
+
+            return (
+              <tr key={overrideKey}>
+                <td className="px-3 py-2 font-medium text-gray-800">{item.date}</td>
+                <td className="px-3 py-2 text-gray-700">{item.weekdayLabel}</td>
+                <td className="px-3 py-2 text-gray-700">
+                  {TIME_LABELS[item.timeKey as keyof typeof TIME_LABELS] ?? item.timeKey}
+                </td>
+                <td className="px-3 py-2 text-gray-700">{item.note || '-'}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.templateId}</td>
+                <td className="px-3 py-2">
+                  <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                    單次停課
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    disabled={isUndoing}
+                    onClick={() => onUndo(item)}
+                    className="rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-amber-200 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                  >
+                    {isUndoing ? '取消中...' : '取消單次停課'}
                   </button>
                 </td>
               </tr>
