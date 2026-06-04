@@ -27,6 +27,8 @@ export interface SlotData {
   note?: string;
   updatedAt?: unknown;
   source?: 'coach' | 'student' | 'system' | 'template';
+  templateId?: string;
+  overrideType?: 'cancel' | 'leave' | 'off' | 'makeup';
 }
 
 export type WeekSchedule = Record<string, Record<string, SlotData>>;
@@ -51,6 +53,8 @@ const converter: FirestoreDataConverter<SlotData> = {
     if (data.name === undefined) delete data.name;
     if (data.publicLabel === undefined) delete data.publicLabel;
     if (data.note === undefined) delete data.note;
+    if (data.templateId === undefined) delete data.templateId;
+    if (data.overrideType === undefined) delete data.overrideType;
     return data;
   },
   fromFirestore: (snap) => snap.data() as SlotData,
@@ -66,7 +70,13 @@ interface ScheduleCtx {
     d: string,
     t: string,
     status: SlotStatus,
-    options?: { name?: string; publicLabel?: string; note?: string }
+    options?: {
+      name?: string;
+      publicLabel?: string;
+      note?: string;
+      templateId?: string;
+      overrideType?: 'cancel' | 'leave' | 'off' | 'makeup';
+    }
   ) => void;
   clearSlotByCoach: (d: string, t: string) => void;
   toggleSlotByCoach: (d: string, t: string) => void;
@@ -160,12 +170,19 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     date: string,
     timeKey: string,
     status: SlotStatus,
-    options?: { name?: string; publicLabel?: string; note?: string }
+    options?: {
+      name?: string;
+      publicLabel?: string;
+      note?: string;
+      templateId?: string;
+      overrideType?: 'cancel' | 'leave' | 'off' | 'makeup';
+    }
   ) => {
     const id = `${date}_${timeKey}`;
     const name = options?.name?.trim();
     const publicLabel = options?.publicLabel?.trim();
     const note = options?.note?.trim();
+    const templateId = options?.templateId?.trim();
     const data: Record<string, any> = {
       date,
       timeKey,
@@ -177,6 +194,8 @@ export function ScheduleProvider({ children }: { children: React.ReactNode }) {
     if (status === 'fixed' && name) data.name = name;
     if (status === 'fixed' && publicLabel) data.publicLabel = publicLabel;
     if (note) data.note = note;
+    if (templateId) data.templateId = templateId;
+    if (options?.overrideType) data.overrideType = options.overrideType;
 
     await setDoc(doc(db, 'schedule', id), data, { merge: false });
   };

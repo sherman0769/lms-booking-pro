@@ -101,7 +101,7 @@ function toAuditRiskItem(date: string, timeKey: string, slot: SlotData): AuditRi
 
 export default function CoachDashboardPage() {
   const { isCoach, enterCoach } = useMode();
-  const { week, isLoading, loadError } = useSchedule();
+  const { week, isLoading, loadError, setSlotByCoach } = useSchedule();
   const {
     activeTemplates,
     isLoading: isLoadingWeeklyTemplates,
@@ -120,6 +120,7 @@ export default function CoachDashboardPage() {
   });
   const [templateSubmitStatus, setTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
   const [disablingTemplateId, setDisablingTemplateId] = useState<string | null>(null);
+  const [cancelingProjectionKey, setCancelingProjectionKey] = useState<string | null>(null);
   const [templateMessage, setTemplateMessage] = useState('');
   const [templateError, setTemplateError] = useState('');
 
@@ -363,6 +364,29 @@ export default function CoachDashboardPage() {
     }
   };
 
+  const handleCancelProjectionOnce = async (item: TemplateProjectionItem) => {
+    const confirmed = window.confirm('確定要將這一天的固定課設為單次停課嗎？');
+    if (!confirmed) return;
+
+    const projectionKey = `${item.date}_${item.timeKey}_${item.templateId}`;
+    setTemplateMessage('');
+    setTemplateError('');
+    setCancelingProjectionKey(projectionKey);
+
+    try {
+      await setSlotByCoach(item.date, item.timeKey, 'off', {
+        templateId: item.templateId,
+        overrideType: 'leave',
+        note: '單次停課',
+      });
+      setTemplateMessage('已設定單次停課');
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '設定單次停課失敗，請稍後再試。');
+    } finally {
+      setCancelingProjectionKey(null);
+    }
+  };
+
   if (!isCoach) {
     return (
       <main className="min-h-screen bg-gray-50 px-4 py-8 text-gray-900">
@@ -469,7 +493,11 @@ export default function CoachDashboardPage() {
                 目前沒有可推導的空白時段，因為對應日期時段已有單日 schedule 資料。
               </p>
             ) : (
-              <ProjectionList items={templateProjection.projected} />
+              <ProjectionList
+                items={templateProjection.projected}
+                cancelingProjectionKey={cancelingProjectionKey}
+                onCancelOnce={handleCancelProjectionOnce}
+              />
             )}
           </div>
 
@@ -803,10 +831,18 @@ function AuditRiskList({
   );
 }
 
-function ProjectionList({ items }: { items: TemplateProjectionItem[] }) {
+function ProjectionList({
+  items,
+  cancelingProjectionKey,
+  onCancelOnce,
+}: {
+  items: TemplateProjectionItem[];
+  cancelingProjectionKey: string | null;
+  onCancelOnce: (item: TemplateProjectionItem) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded-md border border-sky-200">
-      <table className="w-full min-w-[840px] text-left text-sm">
+      <table className="w-full min-w-[960px] text-left text-sm">
         <thead className="bg-sky-50 text-xs font-semibold text-sky-800">
           <tr>
             <th className="px-3 py-2">日期</th>
@@ -817,27 +853,43 @@ function ProjectionList({ items }: { items: TemplateProjectionItem[] }) {
             <th className="px-3 py-2">note</th>
             <th className="px-3 py-2">templateId</th>
             <th className="px-3 py-2">來源</th>
+            <th className="px-3 py-2">操作</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-sky-100">
-          {items.map((item) => (
-            <tr key={`${item.date}-${item.timeKey}-${item.templateId}`}>
-              <td className="px-3 py-2 font-medium text-gray-800">{item.date}</td>
-              <td className="px-3 py-2 text-gray-700">{item.weekdayLabel}</td>
-              <td className="px-3 py-2 text-gray-700">
-                {TIME_LABELS[item.timeKey as keyof typeof TIME_LABELS] ?? item.timeKey}
-              </td>
-              <td className="px-3 py-2 text-gray-700">{item.name || '-'}</td>
-              <td className="px-3 py-2 text-gray-700">{item.publicLabel || '-'}</td>
-              <td className="px-3 py-2 text-gray-700">{item.note || '-'}</td>
-              <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.templateId}</td>
-              <td className="px-3 py-2">
-                <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
-                  每週固定推導
-                </span>
-              </td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const projectionKey = `${item.date}_${item.timeKey}_${item.templateId}`;
+            const isCanceling = cancelingProjectionKey === projectionKey;
+
+            return (
+              <tr key={projectionKey}>
+                <td className="px-3 py-2 font-medium text-gray-800">{item.date}</td>
+                <td className="px-3 py-2 text-gray-700">{item.weekdayLabel}</td>
+                <td className="px-3 py-2 text-gray-700">
+                  {TIME_LABELS[item.timeKey as keyof typeof TIME_LABELS] ?? item.timeKey}
+                </td>
+                <td className="px-3 py-2 text-gray-700">{item.name || '-'}</td>
+                <td className="px-3 py-2 text-gray-700">{item.publicLabel || '-'}</td>
+                <td className="px-3 py-2 text-gray-700">{item.note || '-'}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{item.templateId}</td>
+                <td className="px-3 py-2">
+                  <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
+                    每週固定推導
+                  </span>
+                </td>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    disabled={isCanceling}
+                    onClick={() => onCancelOnce(item)}
+                    className="rounded-md bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  >
+                    {isCanceling ? '設定中...' : '單次停課'}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
