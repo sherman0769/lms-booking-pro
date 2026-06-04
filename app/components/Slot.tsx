@@ -41,12 +41,12 @@ export default function Slot({
 
   const statusStyle = {
     available:
-      'bg-emerald-100 text-emerald-900 ring-emerald-300 hover:bg-emerald-200 hover:ring-emerald-500',
-    booked: 'bg-rose-50 text-rose-800 ring-rose-200',
-    fixed: 'bg-sky-50 text-sky-800 ring-sky-200',
-    off: 'bg-slate-100 text-slate-600 ring-slate-200',
-    unset: 'bg-amber-50 text-amber-800 ring-amber-200',
-    loading: 'bg-gray-100 text-gray-500 ring-gray-200 animate-pulse',
+      'bg-emerald-100 text-emerald-950 ring-emerald-300 hover:bg-emerald-200 hover:ring-emerald-500',
+    booked: 'bg-stone-100 text-stone-700 ring-stone-200',
+    fixed: 'bg-[#f1e8cf] text-[#5d451c] ring-[#d8c18a]',
+    off: 'bg-slate-100 text-slate-500 ring-slate-200',
+    unset: 'bg-[#f8f4ea] text-stone-400 ring-stone-200',
+    loading: 'bg-stone-100 text-stone-500 ring-stone-200 animate-pulse',
   } satisfies Record<SlotDisplayStatus, string>;
 
   const studentLabel = publicLabel || name;
@@ -69,11 +69,11 @@ export default function Slot({
           onClick={click}
           disabled={!isInteractive}
           className={clsx(
-            'min-h-12 h-full w-full rounded-md px-2 py-1 text-xs font-semibold leading-snug shadow-sm ring-1 transition sm:text-sm',
+            'min-h-12 h-full w-full rounded-lg px-2 py-1 text-xs font-semibold leading-snug shadow-sm ring-1 transition sm:text-sm',
             statusStyle[status],
             isInteractive
               ? 'cursor-pointer active:scale-95'
-              : 'cursor-not-allowed opacity-90'
+              : 'cursor-not-allowed opacity-95'
           )}
         >
           <span className="block max-h-9 overflow-hidden break-words text-center">
