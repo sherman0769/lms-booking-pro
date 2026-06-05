@@ -1,4 +1,5 @@
 import AddToHomeScreenHint from './components/AddToHomeScreenHint';
+import CoachDashboardEntry from './components/CoachDashboardEntry';
 import ModeToggle from './components/ModeToggle';
 import TimeTable from './components/TimeTable';
 
@@ -34,6 +35,9 @@ export default function Home() {
 
       {/* ---- 模式切換按鈕 ---- */}
       <ModeToggle />
+
+      {/* ---- 教練後台入口 ---- */}
+      <CoachDashboardEntry />
 
       {/* ---- 手機加入主畫面提示 ---- */}
       <AddToHomeScreenHint />
