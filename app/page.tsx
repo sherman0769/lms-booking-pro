@@ -1,3 +1,4 @@
+import AddToHomeScreenHint from './components/AddToHomeScreenHint';
 import ModeToggle from './components/ModeToggle';
 import TimeTable from './components/TimeTable';
 
@@ -33,6 +34,9 @@ export default function Home() {
 
       {/* ---- 模式切換按鈕 ---- */}
       <ModeToggle />
+
+      {/* ---- 手機加入主畫面提示 ---- */}
+      <AddToHomeScreenHint />
 
       {/* ---- 時間表 ---- */}
       <TimeTable />
