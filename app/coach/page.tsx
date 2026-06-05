@@ -70,10 +70,15 @@ interface TemplateProjectionItem {
 interface SingleCancelItem {
   date: string;
   weekdayLabel: string;
+  weekday: number;
   timeKey: string;
   templateId: string;
+  name?: string;
+  publicLabel?: string;
   note?: string;
 }
+
+type SingleCancelRangeFilter = '7' | '28' | 'all';
 
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
@@ -130,6 +135,10 @@ export default function CoachDashboardPage() {
   const [disablingTemplateId, setDisablingTemplateId] = useState<string | null>(null);
   const [cancelingProjectionKey, setCancelingProjectionKey] = useState<string | null>(null);
   const [undoingSingleCancelKey, setUndoingSingleCancelKey] = useState<string | null>(null);
+  const [singleCancelRangeFilter, setSingleCancelRangeFilter] = useState<SingleCancelRangeFilter>('28');
+  const [singleCancelWeekdayFilter, setSingleCancelWeekdayFilter] = useState('all');
+  const [singleCancelTimeFilter, setSingleCancelTimeFilter] = useState('all');
+  const [singleCancelKeyword, setSingleCancelKeyword] = useState('');
   const [templateMessage, setTemplateMessage] = useState('');
   const [templateError, setTemplateError] = useState('');
 
@@ -292,11 +301,15 @@ export default function CoachDashboardPage() {
           slot.overrideType === 'leave' &&
           slot.templateId
         ) {
+          const template = activeTemplates.find((item) => item.id === slot.templateId);
           items.push({
             date: dateKey,
             weekdayLabel,
+            weekday,
             timeKey,
             templateId: slot.templateId,
+            name: slot.name || template?.name,
+            publicLabel: slot.publicLabel || template?.publicLabel,
             note: slot.note,
           });
         }
@@ -304,7 +317,48 @@ export default function CoachDashboardPage() {
     }
 
     return items;
-  }, [auditDates, week]);
+  }, [activeTemplates, auditDates, week]);
+
+  const filteredSingleCancelOverrides = useMemo(() => {
+    const rangeLimit =
+      singleCancelRangeFilter === '7'
+        ? 7
+        : singleCancelRangeFilter === '28'
+          ? 28
+          : AUDIT_DAYS;
+    const visibleDates = new Set(auditDates.slice(0, rangeLimit));
+    const keyword = singleCancelKeyword.trim().toLowerCase();
+
+    return singleCancelOverrides.filter((item) => {
+      if (!visibleDates.has(item.date)) return false;
+      if (singleCancelWeekdayFilter !== 'all' && item.weekday !== Number(singleCancelWeekdayFilter)) {
+        return false;
+      }
+      if (singleCancelTimeFilter !== 'all' && item.timeKey !== singleCancelTimeFilter) {
+        return false;
+      }
+      if (!keyword) return true;
+
+      const searchable = [
+        item.name,
+        item.publicLabel,
+        item.note,
+        item.templateId,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchable.includes(keyword);
+    });
+  }, [
+    auditDates,
+    singleCancelKeyword,
+    singleCancelOverrides,
+    singleCancelRangeFilter,
+    singleCancelTimeFilter,
+    singleCancelWeekdayFilter,
+  ]);
 
   const todaySlots = TIME_KEYS.map((timeKey) => {
     const { slot, status } = resolveScheduleSlot({
@@ -574,13 +628,26 @@ export default function CoachDashboardPage() {
             {isLoading && <span className="text-sm font-medium text-gray-500">載入單次停課資料中...</span>}
           </div>
 
-          {singleCancelOverrides.length === 0 ? (
+          <SingleCancelFilters
+            rangeFilter={singleCancelRangeFilter}
+            weekdayFilter={singleCancelWeekdayFilter}
+            timeFilter={singleCancelTimeFilter}
+            keyword={singleCancelKeyword}
+            totalCount={singleCancelOverrides.length}
+            filteredCount={filteredSingleCancelOverrides.length}
+            onRangeChange={setSingleCancelRangeFilter}
+            onWeekdayChange={setSingleCancelWeekdayFilter}
+            onTimeChange={setSingleCancelTimeFilter}
+            onKeywordChange={setSingleCancelKeyword}
+          />
+
+          {filteredSingleCancelOverrides.length === 0 ? (
             <p className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600">
-              目前沒有單次停課資料。
+              目前沒有符合條件的單次停課。
             </p>
           ) : (
             <SingleCancelList
-              items={singleCancelOverrides}
+              items={filteredSingleCancelOverrides}
               undoingSingleCancelKey={undoingSingleCancelKey}
               onUndo={handleUndoSingleCancel}
             />
@@ -977,6 +1044,95 @@ function ProjectionList({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SingleCancelFilters({
+  rangeFilter,
+  weekdayFilter,
+  timeFilter,
+  keyword,
+  totalCount,
+  filteredCount,
+  onRangeChange,
+  onWeekdayChange,
+  onTimeChange,
+  onKeywordChange,
+}: {
+  rangeFilter: SingleCancelRangeFilter;
+  weekdayFilter: string;
+  timeFilter: string;
+  keyword: string;
+  totalCount: number;
+  filteredCount: number;
+  onRangeChange: (value: SingleCancelRangeFilter) => void;
+  onWeekdayChange: (value: string) => void;
+  onTimeChange: (value: string) => void;
+  onKeywordChange: (value: string) => void;
+}) {
+  return (
+    <div className="mb-4 rounded-md border border-amber-100 bg-amber-50/60 p-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="block text-sm font-medium text-amber-950">
+          顯示範圍
+          <select
+            value={rangeFilter}
+            onChange={(event) => onRangeChange(event.target.value as SingleCancelRangeFilter)}
+            className="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none ring-amber-100 focus:ring-4"
+          >
+            <option value="7">未來 7 天</option>
+            <option value="28">未來 28 天</option>
+            <option value="all">全部可見範圍</option>
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-amber-950">
+          星期
+          <select
+            value={weekdayFilter}
+            onChange={(event) => onWeekdayChange(event.target.value)}
+            className="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none ring-amber-100 focus:ring-4"
+          >
+            <option value="all">全部星期</option>
+            {WEEKDAY_LABELS.map((label, index) => (
+              <option key={label} value={index}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-amber-950">
+          時段
+          <select
+            value={timeFilter}
+            onChange={(event) => onTimeChange(event.target.value)}
+            className="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none ring-amber-100 focus:ring-4"
+          >
+            <option value="all">全部時段</option>
+            {TIME_KEYS.map((timeKey) => (
+              <option key={timeKey} value={timeKey}>
+                {TIME_LABELS[timeKey]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-amber-950">
+          關鍵字
+          <input
+            type="search"
+            value={keyword}
+            onChange={(event) => onKeywordChange(event.target.value)}
+            className="mt-1 w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none ring-amber-100 focus:ring-4"
+            placeholder="搜尋 name / note / templateId"
+          />
+        </label>
+      </div>
+      <p className="mt-2 text-xs text-amber-900">
+        目前顯示 {filteredCount} 筆，全部單次停課 {totalCount} 筆。
+      </p>
     </div>
   );
 }
