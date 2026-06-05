@@ -48,6 +48,7 @@ const AUDIT_DAYS = 28;
 
 type SourceKey = 'coach' | 'student' | 'template' | 'system' | 'missing';
 type StatusKey = 'available' | 'booked' | 'fixed' | 'off' | 'other';
+type TimeKey = (typeof TIME_KEYS)[number];
 
 interface AuditRiskItem {
   date: string;
@@ -79,6 +80,11 @@ interface SingleCancelItem {
 }
 
 type SingleCancelRangeFilter = '7' | '28' | 'all';
+
+interface QuickTemplateSelection {
+  weekday: number;
+  timeKey: TimeKey;
+}
 
 function getDisplayText(slot: SlotData | undefined, status: SlotDisplayStatus) {
   if (!slot) return STATUS_LABELS[status];
@@ -131,7 +137,14 @@ export default function CoachDashboardPage() {
     publicLabel: '',
     note: '',
   });
+  const [quickTemplateSelection, setQuickTemplateSelection] = useState<QuickTemplateSelection | null>(null);
+  const [quickTemplateForm, setQuickTemplateForm] = useState({
+    name: '',
+    publicLabel: '',
+    note: '',
+  });
   const [templateSubmitStatus, setTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
+  const [quickTemplateSubmitStatus, setQuickTemplateSubmitStatus] = useState<'idle' | 'saving'>('idle');
   const [disablingTemplateId, setDisablingTemplateId] = useState<string | null>(null);
   const [cancelingProjectionKey, setCancelingProjectionKey] = useState<string | null>(null);
   const [undoingSingleCancelKey, setUndoingSingleCancelKey] = useState<string | null>(null);
@@ -152,6 +165,13 @@ export default function CoachDashboardPage() {
     () => Array.from({ length: AUDIT_DAYS }, (_, index) => format(addDays(today, index), 'yyyy-MM-dd')),
     [today]
   );
+  const activeTemplateBySlot = useMemo(() => {
+    const map = new Map<string, WeeklyTemplate>();
+    activeTemplates.forEach((template) => {
+      map.set(`${template.weekday}_${template.timeKey}`, template);
+    });
+    return map;
+  }, [activeTemplates]);
 
   const summary = useMemo(() => {
     const counts = {
@@ -394,6 +414,37 @@ export default function CoachDashboardPage() {
     setTemplateError('');
   };
 
+  const updateQuickTemplateForm = (field: keyof typeof quickTemplateForm, value: string) => {
+    setQuickTemplateForm((current) => ({ ...current, [field]: value }));
+    setTemplateMessage('');
+    setTemplateError('');
+  };
+
+  const selectQuickTemplateSlot = (selection: QuickTemplateSelection) => {
+    const duplicated = activeTemplateBySlot.has(`${selection.weekday}_${selection.timeKey}`);
+    if (duplicated) return;
+
+    setQuickTemplateSelection(selection);
+    setQuickTemplateForm({
+      name: '',
+      publicLabel: '',
+      note: '',
+    });
+    setTemplateMessage('');
+    setTemplateError('');
+  };
+
+  const cancelQuickTemplateCreate = () => {
+    setQuickTemplateSelection(null);
+    setQuickTemplateForm({
+      name: '',
+      publicLabel: '',
+      note: '',
+    });
+    setTemplateMessage('');
+    setTemplateError('');
+  };
+
   const submitTemplate = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setTemplateMessage('');
@@ -435,6 +486,51 @@ export default function CoachDashboardPage() {
       setTemplateError(err instanceof Error ? err.message : '新增固定課模板失敗，請稍後再試。');
     } finally {
       setTemplateSubmitStatus('idle');
+    }
+  };
+
+  const submitQuickTemplate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTemplateMessage('');
+    setTemplateError('');
+
+    if (!quickTemplateSelection) {
+      setTemplateError('請先選擇星期與時段。');
+      return;
+    }
+    if (!quickTemplateForm.name.trim()) {
+      setTemplateError('請輸入名稱 / 班名。');
+      return;
+    }
+
+    const duplicated = activeTemplateBySlot.has(
+      `${quickTemplateSelection.weekday}_${quickTemplateSelection.timeKey}`
+    );
+    if (duplicated) {
+      setTemplateError('這個星期與時段已經有固定課模板。');
+      return;
+    }
+
+    setQuickTemplateSubmitStatus('saving');
+    try {
+      await addWeeklyTemplate({
+        weekday: quickTemplateSelection.weekday,
+        timeKey: quickTemplateSelection.timeKey,
+        name: quickTemplateForm.name,
+        publicLabel: quickTemplateForm.publicLabel,
+        note: quickTemplateForm.note,
+      });
+      setQuickTemplateSelection(null);
+      setQuickTemplateForm({
+        name: '',
+        publicLabel: '',
+        note: '',
+      });
+      setTemplateMessage('已新增每週固定課模板');
+    } catch (err) {
+      setTemplateError(err instanceof Error ? err.message : '新增固定課模板失敗，請稍後再試。');
+    } finally {
+      setQuickTemplateSubmitStatus('idle');
     }
   };
 
@@ -769,6 +865,17 @@ export default function CoachDashboardPage() {
               {weeklyTemplatesError}
             </p>
           )}
+
+          <WeeklyTemplateQuickCreateGrid
+            activeTemplateBySlot={activeTemplateBySlot}
+            selectedSlot={quickTemplateSelection}
+            form={quickTemplateForm}
+            submitStatus={quickTemplateSubmitStatus}
+            onSelectSlot={selectQuickTemplateSlot}
+            onUpdateForm={updateQuickTemplateForm}
+            onCancel={cancelQuickTemplateCreate}
+            onSubmit={submitQuickTemplate}
+          />
 
           <form
             className="mb-5 rounded-md border border-gray-200 bg-gray-50 p-4"
@@ -1194,6 +1301,169 @@ function SingleCancelList({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function WeeklyTemplateQuickCreateGrid({
+  activeTemplateBySlot,
+  selectedSlot,
+  form,
+  submitStatus,
+  onSelectSlot,
+  onUpdateForm,
+  onCancel,
+  onSubmit,
+}: {
+  activeTemplateBySlot: Map<string, WeeklyTemplate>;
+  selectedSlot: QuickTemplateSelection | null;
+  form: { name: string; publicLabel: string; note: string };
+  submitStatus: 'idle' | 'saving';
+  onSelectSlot: (selection: QuickTemplateSelection) => void;
+  onUpdateForm: (field: keyof { name: string; publicLabel: string; note: string }, value: string) => void;
+  onCancel: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const selectedSlotKey = selectedSlot ? `${selectedSlot.weekday}_${selectedSlot.timeKey}` : null;
+  const selectedWeekdayLabel = selectedSlot ? WEEKDAY_LABELS[selectedSlot.weekday] : '';
+  const selectedTimeLabel = selectedSlot
+    ? TIME_LABELS[selectedSlot.timeKey as keyof typeof TIME_LABELS] ?? selectedSlot.timeKey
+    : '';
+
+  return (
+    <div className="mb-5 rounded-md border border-sky-100 bg-sky-50/60 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-base font-bold text-sky-950">星期 × 時段快速新增固定課</h3>
+          <p className="text-sm text-sky-800">
+            點選空白格快速建立固定課。已設定格只顯示目前 active template，不提供編輯或停用。
+          </p>
+        </div>
+        <span className="text-xs font-semibold text-sky-700">手機可左右滑動查看完整表格</span>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded-md border border-sky-200 bg-white">
+        <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
+          <thead className="bg-sky-50 text-xs font-semibold text-sky-800">
+            <tr>
+              <th className="sticky left-0 z-20 w-28 border-b border-sky-200 bg-sky-50 px-3 py-2">
+                時段
+              </th>
+              {WEEKDAY_LABELS.map((label) => (
+                <th key={label} className="border-b border-sky-200 px-3 py-2 text-center">
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {TIME_KEYS.map((timeKey) => (
+              <tr key={timeKey} className="border-b border-sky-100">
+                <th className="sticky left-0 z-10 border-b border-sky-100 bg-white px-3 py-2 text-xs font-semibold text-gray-700">
+                  {TIME_LABELS[timeKey]}
+                </th>
+                {WEEKDAY_LABELS.map((weekdayLabel, weekday) => {
+                  const slotKey = `${weekday}_${timeKey}`;
+                  const template = activeTemplateBySlot.get(slotKey);
+                  const isSelected = selectedSlotKey === slotKey;
+                  const displayName = template?.name || template?.publicLabel || '固定課';
+
+                  return (
+                    <td key={slotKey} className="border-b border-sky-100 px-2 py-2 align-top">
+                      {template ? (
+                        <div className="min-h-16 rounded-md border border-sky-200 bg-sky-100 px-2 py-2 text-sky-950">
+                          <p className="line-clamp-2 text-xs font-bold">{displayName}</p>
+                          {template.publicLabel && template.publicLabel !== template.name && (
+                            <p className="mt-1 line-clamp-1 text-[11px] text-sky-800">
+                              {template.publicLabel}
+                            </p>
+                          )}
+                          <p className="mt-2 text-[11px] font-semibold text-sky-700">已設定</p>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSelectSlot({ weekday, timeKey })}
+                          className={`flex min-h-16 w-full flex-col items-center justify-center rounded-md border border-dashed px-2 py-2 text-xs font-semibold transition ${
+                            isSelected
+                              ? 'border-indigo-400 bg-indigo-50 text-indigo-800 ring-2 ring-indigo-100'
+                              : 'border-gray-300 bg-white text-gray-500 hover:border-sky-300 hover:bg-sky-50 hover:text-sky-800'
+                          }`}
+                          aria-label={`新增 ${weekdayLabel} ${TIME_LABELS[timeKey]} 固定課`}
+                        >
+                          <span className="text-lg leading-none">＋</span>
+                          <span className="mt-1">新增</span>
+                        </button>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedSlot && (
+        <form
+          className="mt-4 rounded-md border border-indigo-100 bg-white p-4"
+          onSubmit={onSubmit}
+        >
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold text-indigo-900">
+                新增：{selectedWeekdayLabel} · {selectedTimeLabel}
+              </p>
+              <p className="text-xs text-gray-500">此操作會新增 active weeklyTemplate，不會寫入 schedule。</p>
+            </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-fit rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-200"
+            >
+              取消
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block text-sm font-medium text-gray-700">
+              名稱 / 班名
+              <input
+                value={form.name}
+                onChange={(event) => onUpdateForm('name', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                placeholder="王同學、LMS 固定班"
+              />
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              公開顯示名稱
+              <input
+                value={form.publicLabel}
+                onChange={(event) => onUpdateForm('publicLabel', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                placeholder="私人訓練固定課"
+              />
+            </label>
+            <label className="block text-sm font-medium text-gray-700">
+              備註
+              <input
+                value={form.note}
+                onChange={(event) => onUpdateForm('note', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none ring-indigo-200 focus:ring-4"
+                placeholder="只給教練端看的內部備註"
+              />
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitStatus === 'saving'}
+            className="mt-4 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+          >
+            {submitStatus === 'saving' ? '新增中...' : '新增固定課'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
