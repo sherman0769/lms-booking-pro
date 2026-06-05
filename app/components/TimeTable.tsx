@@ -80,42 +80,45 @@ export default function TimeTable() {
 
   return (
     <div className="w-full">
-      <div className="mx-auto mb-3 flex w-full max-w-md flex-col items-stretch gap-2 rounded-md bg-white px-3 py-3 text-sm text-gray-700 shadow-sm ring-1 ring-gray-200 sm:w-fit sm:max-w-full sm:flex-row sm:items-center sm:gap-3 sm:py-2">
-        <p className="text-center font-medium sm:text-left">{rangeLabel}</p>
+      <div className="mx-auto mb-4 flex w-full max-w-md flex-col items-stretch gap-3 rounded-2xl border border-white/70 bg-white/75 px-4 py-4 text-sm text-stone-700 shadow-[0_16px_40px_rgba(31,41,31,0.08)] backdrop-blur sm:w-fit sm:max-w-full sm:flex-row sm:items-center sm:gap-4 sm:py-3">
+        <p className="text-center font-semibold text-emerald-950 sm:text-left">
+          {rangeLabel}
+        </p>
         <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
           <a
             href={previousWeekHref}
-            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
+            className="flex min-h-10 items-center justify-center rounded-full border border-stone-200 bg-white/80 px-3 py-2 text-center font-semibold text-stone-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-950 active:bg-emerald-100 sm:min-h-0 sm:py-1.5"
           >
             上一週
           </a>
           <a
             href="/"
-            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
+            className="flex min-h-10 items-center justify-center rounded-full border border-emerald-800 bg-emerald-900 px-3 py-2 text-center font-semibold text-white shadow-sm transition hover:bg-emerald-800 active:bg-emerald-950 sm:min-h-0 sm:py-1.5"
           >
             本週
           </a>
           <a
             href={nextWeekHref}
-            className="flex min-h-10 items-center justify-center rounded-md border border-gray-200 px-3 py-2 text-center font-medium text-gray-700 transition hover:bg-gray-50 active:bg-gray-100 sm:min-h-0 sm:py-1.5"
+            className="flex min-h-10 items-center justify-center rounded-full border border-stone-200 bg-white/80 px-3 py-2 text-center font-semibold text-stone-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-950 active:bg-emerald-100 sm:min-h-0 sm:py-1.5"
           >
             下一週
           </a>
         </div>
       </div>
-      <p className="mx-auto mb-2 w-fit rounded-full bg-indigo-50 px-3 py-1 text-center text-xs font-medium text-indigo-700 ring-1 ring-indigo-100 sm:hidden">
+      <p className="mx-auto mb-3 w-fit rounded-full bg-emerald-50 px-3 py-1 text-center text-xs font-semibold text-emerald-800 ring-1 ring-emerald-100 sm:hidden">
         可左右滑動查看完整週課表
       </p>
       {notice && (
-        <p className="mx-auto mb-3 w-fit rounded-md bg-white px-3 py-2 text-center text-sm font-medium text-gray-600 shadow-sm ring-1 ring-gray-200">
+        <p className="mx-auto mb-3 w-fit rounded-xl bg-white/85 px-3 py-2 text-center text-sm font-medium text-stone-600 shadow-sm ring-1 ring-stone-200">
           {notice}
         </p>
       )}
-      <div className="w-full overflow-x-auto overscroll-x-contain pb-2">
-        <table className="mx-auto min-w-[760px] rounded-lg shadow ring-1 ring-gray-200 sm:min-w-0">
+      <div className="rounded-2xl border border-white/70 bg-white/80 p-2 shadow-[0_24px_70px_rgba(31,41,31,0.12)] backdrop-blur sm:p-3">
+        <div className="w-full overflow-x-auto overscroll-x-contain rounded-xl pb-2">
+        <table className="mx-auto min-w-[760px] border-separate border-spacing-0 overflow-hidden rounded-xl ring-1 ring-stone-200 sm:min-w-0">
           <thead>
             <tr>
-              <th className="sticky left-0 z-20 w-28 bg-white"></th>
+              <th className="sticky left-0 z-20 w-28 bg-stone-50"></th>
               {dates.map((d) => (
                 <DayHeader key={d.toISOString()} date={d} />
               ))}
@@ -129,7 +132,7 @@ export default function TimeTable() {
                 <tr key={k}>
                   <th
                     colSpan={8}
-                    className="h-8 bg-gray-50 text-center text-xs font-medium text-gray-500 sm:h-10 sm:text-sm"
+                    className="h-8 bg-stone-100/80 text-center text-xs font-semibold text-stone-500 sm:h-10 sm:text-sm"
                   >
                     {label}
                   </th>
@@ -137,7 +140,7 @@ export default function TimeTable() {
               ) : (
                 /* 一般可互動行 */
                 <tr key={k}>
-                  <th className="sticky left-0 z-10 h-14 w-28 bg-gray-50 px-2 text-center text-xs font-semibold text-gray-700 ring-1 ring-gray-200 sm:h-14 sm:text-sm">
+                  <th className="sticky left-0 z-10 h-14 w-28 bg-stone-50 px-2 text-center text-xs font-semibold text-stone-700 ring-1 ring-stone-200 sm:h-14 sm:text-sm">
                     {label}
                   </th>
                   {dates.map((d) => {
@@ -166,6 +169,7 @@ export default function TimeTable() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

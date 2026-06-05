@@ -14,7 +14,7 @@ export default function ModeToggle() {
     <>
       <button
         onClick={click}
-        className="fixed bottom-6 right-6 sm:static sm:mb-4 rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 px-5 py-3 text-sm font-medium text-white shadow-lg active:scale-95"
+        className="fixed bottom-6 right-6 z-30 rounded-full bg-emerald-950 px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_35px_rgba(6,78,59,0.28)] ring-1 ring-white/30 transition hover:bg-emerald-900 active:scale-95 sm:static sm:mb-4"
       >
         {isCoach ? '學生模式' : '教練模式'}
       </button>
